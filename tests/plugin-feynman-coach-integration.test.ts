@@ -41,6 +41,17 @@ test("the feynman-explain question/answer schemas accept the confidence scale an
 		assert.deepEqual(questionDefinition.validateAnswer({ answer: { explanation, confidence: 50 } }), ["explanation must contain nonwhitespace text"]);
 	}
 	assert.equal(questionDefinition.validateAnswer({ answer: { explanation: "A real explanation.", confidence: 50 } }), undefined);
+	// The "I don't know" path is its own schema branch, bypassing the explanation's
+	// minLength entirely rather than loosening it: a decline can never also carry a
+	// stale explanation or confidence through re-validation.
+	assert.equal(answer.Check({ dontKnow: true }), true);
+	for (const value of [
+		{ dontKnow: false },
+		{ dontKnow: true, explanation: "ok" },
+		{ dontKnow: true, confidence: 50 },
+		{ dontKnow: true, explanation: "ok", confidence: 50 },
+	]) assert.equal(answer.Check(value), false);
+	assert.equal(questionDefinition.validateAnswer({ answer: { dontKnow: true } }), undefined, "dontKnow bypasses the nonwhitespace-explanation check");
 	assert.equal(questionDefinition.showThinking, false);
 	assert.equal("probe" in questionDefinition, false);
 	assert.equal(questionDefinition.teach.toolName, "feynman_explain");
@@ -85,6 +96,21 @@ test("feynman-coach example composes its explain-back instructions and a native 
 	});
 	assert.match(agent.state.systemPrompt, /explain the whole node back in his own words/);
 	assert.match(agent.state.systemPrompt, /at most/);
+	// Finding 1 (strict grading): a confident explanation with a gap must not be waved
+	// through, and the instructions must say so explicitly, mirroring the app's own
+	// free-recall/confidence doctrine.
+	assert.match(agent.state.systemPrompt, /never mark it right to be kind/);
+	assert.match(agent.state.systemPrompt, /CONFIDENT explanation.*must not be waved through/);
+	assert.match(agent.state.systemPrompt, /high confidence raises your scrutiny, it never lowers it/);
+	// Finding 2 (node close is the teacher's own judgment): the instructions must define
+	// the trigger and say a revisited node makes its earlier close tentative, without
+	// changing the per-close offer frequency (still "at EVERY close").
+	assert.match(agent.state.systemPrompt, /at EVERY close/);
+	assert.match(agent.state.systemPrompt, /tentative, not a verdict/);
+	assert.match(agent.state.systemPrompt, /nodes are never marked finished/);
+	// Finding 3 ("I don't know" parity): a decline is a genuine gap, never a retry occasion.
+	assert.match(agent.state.systemPrompt, /dontKnow: true/);
+	assert.match(agent.state.systemPrompt, /don't spend one of the two retries on a decline/);
 	assert(agent.state.tools.some(tool => tool.name === "quiz"), "core tools remain available");
 	const explainTool = agent.state.tools.find(tool => tool.name === "feynman_explain");
 	assert(explainTool, "feynman_explain is exposed as a native teach tool");

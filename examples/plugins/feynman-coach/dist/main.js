@@ -13,9 +13,15 @@ const ANSWER_FIELD_WRAP = "rounded-[10px] border border-border/70 bg-background/
 const ANSWER_FIELD_LABEL = "px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground";
 const EXPLANATION_MAX = 2000;
 const ANSWER_FIELD_INPUT = "field-sizing-content lh-input max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground";
+// Same literal strings as the native quiz option row/mark (components/question-dock.tsx):
+// the "I don't know" row is one of the options there, there's no options list here to
+// borrow a position from, so DONT_KNOW_WRAP (margin only) is this plugin's own choice.
+const DONT_KNOW_WRAP = "mt-2";
+const QC_OPTION_ROW = "flex items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors";
+const QC_OPTION_MARK = "flex size-4 shrink-0 items-center justify-center border";
 const CONFIDENCE_ROW_PAD = "pt-1.5 pb-3.5";
 const CONFIDENCE_ROW = "flex items-center gap-3";
-const CONFIDENCE_LABEL = "shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground";
+const CONFIDENCE_LABEL = "shrink-0 text-xs font-medium uppercase tracking-wide";
 const CONFIDENCE_TRACK = "relative h-4 min-w-0 flex-1";
 const CONFIDENCE_RAIL_OVERLAY = "pointer-events-none absolute top-1/2 left-2 right-2 h-1.5 -translate-y-1/2 rounded-full border border-border";
 const CONFIDENCE_SLIDER = "absolute inset-0 h-4 w-full cursor-pointer appearance-none bg-transparent outline-none "
@@ -27,6 +33,7 @@ const CONFIDENCE_VALUE = "w-[4ch] shrink-0 text-center font-mono text-sm tabular
 const STATIC_RAIL = "h-1.5 w-full rounded-full border border-border min-w-0 flex-1";
 const ANSWERED_ROW = "mt-3 flex items-center gap-3";
 const ANSWERED_TEXT = "lh-prose mt-2 whitespace-pre-wrap";
+const ANSWERED_DONT_KNOW = "mt-2 text-sm text-muted-foreground";
 
 function nearestStopIndex(value) {
   let best = 0;
@@ -61,6 +68,8 @@ export function activate(ctx) {
       const initial = readValue(props.answer);
       let index = typeof initial?.confidence === "number" && CONFIDENCE_STOPS.includes(initial.confidence)
         ? CONFIDENCE_STOPS.indexOf(initial.confidence) : DEFAULT_CONFIDENCE_INDEX;
+      let dontKnow = initial?.dontKnow === true;
+      let active = props.active;
 
       const field = doc.createElement("div");
       field.setAttribute("data-testid", "answer-field");
@@ -73,7 +82,6 @@ export function activate(ctx) {
       textarea.rows = 4;
       textarea.className = ANSWER_FIELD_INPUT;
       textarea.maxLength = EXPLANATION_MAX;
-      textarea.disabled = !props.active;
       textarea.value = typeof initial?.explanation === "string" ? initial.explanation : "";
       textarea.placeholder = props.input.payload && props.input.payload.mode === "short"
         ? "One sentence, in your own words, no terms the teacher used."
@@ -81,16 +89,32 @@ export function activate(ctx) {
       field.append(label, textarea);
       container.append(field);
 
+      // Same literal row/mark classes as the native quiz "I don't know" option
+      // (components/question-dock.tsx), so it reads as the identical control —
+      // just outside the options list this box doesn't have.
+      const dontKnowRow = doc.createElement("div");
+      dontKnowRow.className = DONT_KNOW_WRAP;
+      const dontKnowButton = doc.createElement("button");
+      dontKnowButton.type = "button";
+      dontKnowButton.setAttribute("data-testid", "feynman-dont-know");
+      const dontKnowMark = doc.createElement("span");
+      const dontKnowDot = doc.createElement("span");
+      dontKnowDot.className = "size-1.5 rounded-full bg-current";
+      dontKnowMark.append(dontKnowDot);
+      const dontKnowLabel = doc.createElement("span");
+      dontKnowLabel.textContent = "I don't know";
+      dontKnowButton.append(dontKnowMark, dontKnowLabel);
+      dontKnowRow.append(dontKnowButton);
+      container.append(dontKnowRow);
+
       const confidenceRow = doc.createElement("div");
       confidenceRow.setAttribute("data-question-confidence", "");
       confidenceRow.className = CONFIDENCE_ROW_PAD;
       const inner = doc.createElement("div");
       inner.className = CONFIDENCE_ROW;
       const confidenceLabel = doc.createElement("span");
-      confidenceLabel.className = CONFIDENCE_LABEL;
       confidenceLabel.textContent = "Confidence";
       const track = doc.createElement("div");
-      track.className = CONFIDENCE_TRACK;
       track.setAttribute("data-testid", "confidence-track");
       const rail = doc.createElement("div");
       rail.setAttribute("aria-hidden", "true");
@@ -99,59 +123,97 @@ export function activate(ctx) {
       const slider = doc.createElement("input");
       slider.type = "range";
       slider.min = "0"; slider.max = "100"; slider.step = "1";
-      slider.disabled = !props.active;
       slider.setAttribute("aria-label", "Confidence — the probability your explanation holds up");
       slider.title = "How sure you are this explanation holds up — 50% is a coin flip.";
       slider.setAttribute("data-testid", "confidence-slider");
       slider.className = CONFIDENCE_SLIDER;
       const valueLabel = doc.createElement("span");
       valueLabel.setAttribute("data-testid", "confidence-value");
-      valueLabel.className = CONFIDENCE_VALUE;
       const paint = () => {
         paintRail(rail, CONFIDENCE_STOPS[index]);
         slider.value = String(CONFIDENCE_STOPS[index]);
         slider.style.color = CONFIDENCE_COLORS[index];
-        valueLabel.textContent = `${CONFIDENCE_STOPS[index]}%`;
+        confidenceLabel.className = `${CONFIDENCE_LABEL} ${dontKnow ? "text-muted-foreground/50" : "text-muted-foreground"}`;
+        track.className = dontKnow ? `${CONFIDENCE_TRACK} opacity-40` : CONFIDENCE_TRACK;
+        slider.disabled = !active || dontKnow;
+        valueLabel.className = dontKnow ? `${CONFIDENCE_VALUE} text-muted-foreground/50` : CONFIDENCE_VALUE;
+        valueLabel.textContent = dontKnow ? "—" : `${CONFIDENCE_STOPS[index]}%`;
       };
       track.append(rail, slider);
       inner.append(confidenceLabel, track, valueLabel);
       confidenceRow.append(inner);
       container.append(confidenceRow);
-      paint();
+
+      const renderDontKnow = () => {
+        textarea.disabled = !active || dontKnow;
+        dontKnowButton.disabled = !active;
+        dontKnowButton.setAttribute("aria-pressed", String(dontKnow));
+        dontKnowButton.className = `${QC_OPTION_ROW} border-dashed ${dontKnow ? "border-primary text-foreground" : "text-muted-foreground"}`;
+        dontKnowMark.className = `${QC_OPTION_MARK} rounded-full ${dontKnow ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`;
+        dontKnowDot.style.display = dontKnow ? "" : "none";
+        paint();
+      };
+      renderDontKnow();
 
       let disposed = false;
       const publish = () => {
         if (disposed) return;
+        if (dontKnow) { props.onChange({ status: "ready", value: { dontKnow: true } }); return; }
         const explanation = textarea.value.trim();
         if (!explanation) { props.onChange({ status: "empty" }); return; }
         props.onChange({ status: "ready", value: { explanation: textarea.value, confidence: CONFIDENCE_STOPS[index] } });
       };
       const onSlide = () => { index = nearestStopIndex(Number(slider.value)); paint(); publish(); };
+      const onToggleDontKnow = () => {
+        if (!active) return;
+        dontKnow = !dontKnow;
+        if (dontKnow) textarea.value = "";
+        renderDontKnow();
+        publish();
+      };
       textarea.addEventListener("input", publish);
       slider.addEventListener("input", onSlide);
+      dontKnowButton.addEventListener("click", onToggleDontKnow);
       publish();
 
       return {
         update(next) {
-          textarea.disabled = !next.active;
-          slider.disabled = !next.active;
+          active = next.active;
           const value = readValue(next.answer);
           if (value) {
             if (typeof value.explanation === "string" && value.explanation !== textarea.value) textarea.value = value.explanation;
             if (typeof value.confidence === "number" && CONFIDENCE_STOPS.includes(value.confidence) && CONFIDENCE_STOPS.indexOf(value.confidence) !== index) {
               index = CONFIDENCE_STOPS.indexOf(value.confidence);
-              paint();
             }
+            if (typeof value.dontKnow === "boolean" && value.dontKnow !== dontKnow) dontKnow = value.dontKnow;
           }
+          renderDontKnow();
         },
         focus() { textarea.focus(); },
-        appendTranscript(text) { textarea.value = (textarea.value + text).slice(0, EXPLANATION_MAX); publish(); },
-        dispose() { disposed = true; textarea.removeEventListener("input", publish); slider.removeEventListener("input", onSlide); },
+        appendTranscript(text) {
+          if (dontKnow) return;
+          textarea.value = (textarea.value + text).slice(0, EXPLANATION_MAX);
+          publish();
+        },
+        dispose() {
+          disposed = true;
+          textarea.removeEventListener("input", publish);
+          slider.removeEventListener("input", onSlide);
+          dontKnowButton.removeEventListener("click", onToggleDontKnow);
+        },
       };
     },
     mountAnswered(container, props) {
       const doc = container.ownerDocument;
       const answer = props.answer;
+      if (answer && answer.dontKnow === true) {
+        const note = doc.createElement("div");
+        note.setAttribute("data-testid", "feynman-dont-know-answered");
+        note.className = ANSWERED_DONT_KNOW;
+        note.textContent = "Answered “I don't know”.";
+        container.append(note);
+        return;
+      }
       const paragraph = doc.createElement("div");
       paragraph.setAttribute("data-testid", "feynman-explanation-answered");
       paragraph.className = ANSWERED_TEXT;
