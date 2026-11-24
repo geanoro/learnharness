@@ -11,6 +11,7 @@ const TICK_COLOR = "color-mix(in oklab, var(--foreground) 35%, transparent)";
 
 const ANSWER_FIELD_WRAP = "rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50";
 const ANSWER_FIELD_LABEL = "px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground";
+const EXPLANATION_MAX = 2000;
 const ANSWER_FIELD_INPUT = "field-sizing-content lh-input max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground";
 const CONFIDENCE_ROW_PAD = "pt-1.5 pb-3.5";
 const CONFIDENCE_ROW = "flex items-center gap-3";
@@ -71,6 +72,7 @@ export function activate(ctx) {
       textarea.setAttribute("data-testid", "feynman-explanation-input");
       textarea.rows = 4;
       textarea.className = ANSWER_FIELD_INPUT;
+      textarea.maxLength = EXPLANATION_MAX;
       textarea.disabled = !props.active;
       textarea.value = typeof initial?.explanation === "string" ? initial.explanation : "";
       textarea.placeholder = props.input.payload && props.input.payload.mode === "short"
@@ -143,7 +145,7 @@ export function activate(ctx) {
           }
         },
         focus() { textarea.focus(); },
-        appendTranscript(text) { textarea.value += text; publish(); },
+        appendTranscript(text) { textarea.value = (textarea.value + text).slice(0, EXPLANATION_MAX); publish(); },
         dispose() { disposed = true; textarea.removeEventListener("input", publish); slider.removeEventListener("input", onSlide); },
       };
     },
