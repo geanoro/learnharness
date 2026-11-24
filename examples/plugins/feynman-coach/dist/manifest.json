@@ -4,6 +4,7 @@
   "name": "Feynman coach checkpoint",
   "version": "1.0.0",
   "minAppVersion": "0.6.1",
-  "description": "Additive teacher instructions: a plain-words explain-back checkpoint when a plan node closes, gap-pointing retries, at most two rounds before the correct version. No tools, no new question type, no learning-data writes.",
+  "description": "A dedicated Feynman explain-back question box (its own confidence bar) posed when a plan node closes, gap-pointing retries, at most two rounds before the correct version. No core edits, no persisted format/schema changes, no learning-data writes.",
+  "main": "main.js",
   "backend": "backend.cjs"
 }
