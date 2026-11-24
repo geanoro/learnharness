@@ -61,7 +61,7 @@ const PRODUCT_NAME = "Feynman Harness";
 // resolveSharedDataDir() below.
 app.setName(PRODUCT_NAME);
 const AUTH_FILE = () => path.join(app.getPath("userData"), "auth.json");
-const DATA_DIR = () => resolveSharedDataDir({ env: process.env, userDataDir: app.getPath("userData") }) ?? path.join(app.getPath("userData"), "data");
+const DATA_DIR = () => resolveSharedDataDir({ env: process.env, userDataDir: app.getPath("userData"), log }) ?? path.join(app.getPath("userData"), "data");
 
 // Resolve the saved palette before window creation; renderer reports keep
 // it current after live saves. This helper needs no compiled server bundle.
@@ -726,7 +726,7 @@ async function main() {
 		});
 		await subscriptions.ready;
 		log(`starting server: ${serverEntry()}`);
-		log(`data dir: ${DATA_DIR()}${fs.existsSync(AUTH_FILE()) ? " · auth.json: present" : " · auth.json: ABSENT (no BYOK keys yet)"}`);
+		log(`data dir: ${DATA_DIR()}${resolveSharedDataDir({ env: process.env, userDataDir: app.getPath("userData") }) ? " (shared override)" : ""}${fs.existsSync(AUTH_FILE()) ? " · auth.json: present" : " · auth.json: ABSENT (no BYOK keys yet)"}`);
 		await startServer(new URL(url).port);
 		await waitUntilUp(url);
 		log(`server up: ${url}`);

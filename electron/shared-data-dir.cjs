@@ -17,13 +17,18 @@ const CONFIG_FILE = "shared-data-dir.json";
  * <userData>/shared-data-dir.json `{ "path": "..." }`, else null (caller
  * falls back to its per-app default). Either source names the OTHER app's
  * data/ folder directly, not its userData root. */
-function resolveSharedDataDir({ env, userDataDir }) {
+function resolveSharedDataDir({ env, userDataDir, log = () => {} }) {
+	const accept = (source, value) => {
+		if (path.isAbsolute(value)) return value;
+		log(`shared data dir from ${source} ignored (must be an absolute path, "~" is not expanded): ${value}`);
+		return null;
+	};
 	if (typeof env.LH_SHARED_DATA_DIR === "string" && env.LH_SHARED_DATA_DIR.trim()) {
-		return env.LH_SHARED_DATA_DIR;
+		return accept("LH_SHARED_DATA_DIR", env.LH_SHARED_DATA_DIR);
 	}
 	try {
 		const parsed = JSON.parse(fs.readFileSync(path.join(userDataDir, CONFIG_FILE), "utf8"));
-		if (typeof parsed?.path === "string" && parsed.path.trim()) return parsed.path;
+		if (typeof parsed?.path === "string" && parsed.path.trim()) return accept(CONFIG_FILE, parsed.path);
 	} catch {
 		/* absent, unreadable, or invalid config file — fall back to the per-app default */
 	}

@@ -58,4 +58,15 @@ describe("resolveSharedDataDir", () => {
 		fs.writeFileSync(path.join(userDataDir, CONFIG_FILE), JSON.stringify({ path: 42 }));
 		assert.equal(resolveSharedDataDir({ env: {}, userDataDir }), null);
 	});
+
+	it("rejects relative and ~ paths from env and config, logging why, instead of passing them on", () => {
+		const userDataDir = tmpUserDataDir();
+		const logs: string[] = [];
+		const log = (m: string) => logs.push(m);
+		assert.equal(resolveSharedDataDir({ env: { LH_SHARED_DATA_DIR: "~/data" }, userDataDir, log }), null);
+		assert.equal(resolveSharedDataDir({ env: { LH_SHARED_DATA_DIR: "rel/data" }, userDataDir, log }), null);
+		fs.writeFileSync(path.join(userDataDir, CONFIG_FILE), JSON.stringify({ path: "../data" }));
+		assert.equal(resolveSharedDataDir({ env: {}, userDataDir, log }), null);
+		assert.equal(logs.length, 3);
+	});
 });
