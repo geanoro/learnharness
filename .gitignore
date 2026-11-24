@@ -10,7 +10,6 @@ data/
 !.env.example
 !.env.*.example
 .memory/
-# Playwright MCP tool scratch (page snapshots/console logs); not project output.
 SCOPE.md
 # raw real-data import sources (user directive 2026-09-13: never commit)
 real-data-extraction/
