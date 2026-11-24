@@ -79,10 +79,10 @@ describe("desktop standalone payload", () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "lh-example-layout-"));
 		const directory = path.join(root, "plugins");
 		fs.cpSync(path.resolve("examples/plugins"), directory, { recursive: true });
-		const host = createPluginHost({ directory, appVersion: "0.4.1", createServices() { throw Error("disabled examples must not create services"); } });
+		const host = createPluginHost({ directory, appVersion: "0.7.0", createServices() { throw Error("disabled examples must not create services"); } });
 		try {
 			await host.initialize();
-			assert.deepEqual(host.list().map(plugin => [plugin.id, plugin.status]), [["hello-plugin", "disabled"], ["managed-agent", "disabled"], ["teaching-extension", "disabled"]]);
+			assert.deepEqual(host.list().map(plugin => [plugin.id, plugin.status]), [["feynman-coach", "disabled"], ["hello-plugin", "disabled"], ["managed-agent", "disabled"], ["teaching-extension", "disabled"]]);
 			for (const plugin of host.list()) {
 				assert.ok(fs.existsSync(path.join(directory, plugin.id, "dist", "manifest.json")));
 				assert.equal(fs.existsSync(path.join(directory, plugin.id, "manifest.json")), false);

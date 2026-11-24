@@ -272,6 +272,10 @@ as directly by the primary sources:
   [`dist/main.js`](../examples/plugins/teaching-extension/dist/main.js). It is a focused
   existing-agent recipe, not a replacement for Flashcards, coding practice or custom
   learner-input contracts.
+- [Feynman coach checkpoint](../examples/plugins/feynman-coach/README.md): additive
+  teacher instructions only, with no tools or storage. Read
+  [`dist/backend.cjs`](../examples/plugins/feynman-coach/dist/backend.cjs). It lives in
+  the repository checkout and is not part of the downloaded authoring kit.
 
 Explicitly running their agents/workers may incur configured-provider costs. Reading,
 copying or enabling examples is not permission to make model requests. For APIs not

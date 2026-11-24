@@ -1,0 +1,9 @@
+{
+  "apiVersion": 1,
+  "id": "feynman-coach",
+  "name": "Feynman coach checkpoint",
+  "version": "1.0.0",
+  "minAppVersion": "0.6.1",
+  "description": "Additive teacher instructions: a plain-words explain-back checkpoint when a plan node closes, gap-pointing retries, at most two rounds before the correct version. No tools, no new question type, no learning-data writes.",
+  "backend": "backend.cjs"
+}
