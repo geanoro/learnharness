@@ -277,6 +277,12 @@ as directly by the primary sources:
   and `registerQuestionRenderer`. Read
   [`dist/backend.cjs`](../examples/plugins/feynman-coach/dist/backend.cjs). It lives in
   the repository checkout and is not part of the downloaded authoring kit.
+- Course material (`examples/plugins/course-material/`): a persistent
+  course-to-slide-folder map through `registerSettings`, a grounding directive added to
+  the prober, teacher and practice prompts, and one listing tool; the native `pdf` job
+  still does the reading and citing. Read its `dist/backend.cjs` with `dist/main.js` for
+  a settings page built from host classes alone. It lives in the repository checkout and
+  is not part of the downloaded authoring kit.
 
 Explicitly running their agents/workers may incur configured-provider costs. Reading,
 copying or enabling examples is not permission to make model requests. For APIs not
