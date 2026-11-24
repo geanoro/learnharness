@@ -76,8 +76,9 @@ remain reserved when a package is missing/corrupt; community collisions are skip
 reported separately without changing files or blocking the legitimate core package.
 Shared corrupt enable metadata is refused rather than overwritten.
 
-Electron sets `LH_DATA_DIR` to `<Electron userData>/data`; on macOS this is
-`~/Library/Application Support/LearnHarness/data/`. Ordinary development defaults to
+Electron sets `LH_DATA_DIR` to `<Electron userData>/data` (or a configured shared `data/`
+folder, see [getting-started](getting-started.md#sharing-data-with-another-installed-learnharness-family-app));
+on macOS the default is `~/Library/Application Support/Feynman Harness/data/`. Ordinary development defaults to
 repository `data/`. Backend activation and disabled-package task recovery use the same
 origin-aware writable path resolver; neither falls back to old community copies of core
 data. Recovery never executes plugin code or creates missing data directories.
