@@ -272,11 +272,10 @@ as directly by the primary sources:
   [`dist/main.js`](../examples/plugins/teaching-extension/dist/main.js). It is a focused
   existing-agent recipe, not a replacement for Flashcards, coding practice or custom
   learner-input contracts.
-- [Feynman coach checkpoint](../examples/plugins/feynman-coach/README.md): dedicated
+- Feynman coach checkpoint (`examples/plugins/feynman-coach/`): dedicated
   explain-back question box with its own confidence bar, built on `registerQuestionType`
-  and `registerQuestionRenderer`. Read
-  [`dist/backend.cjs`](../examples/plugins/feynman-coach/dist/backend.cjs). It lives in
-  the repository checkout and is not part of the downloaded authoring kit.
+  and `registerQuestionRenderer`. Read its `dist/backend.cjs`. It lives in the repository
+  checkout and is not part of the downloaded authoring kit.
 - Course material (`examples/plugins/course-material/`): a persistent
   course-to-slide-folder map through `registerSettings`, a grounding directive added to
   the prober, teacher and practice prompts, and one listing tool; the native `pdf` job

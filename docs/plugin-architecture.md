@@ -77,7 +77,8 @@ reported separately without changing files or blocking the legitimate core packa
 Shared corrupt enable metadata is refused rather than overwritten.
 
 Electron sets `LH_DATA_DIR` to `<Electron userData>/data` (or a configured shared `data/`
-folder, see [getting-started](getting-started.md#sharing-data-with-another-installed-learnharness-family-app));
+folder, see "Sharing data with another installed LearnHarness-family app" in
+`docs/getting-started.md`, which is not part of this plugin documentation set);
 on macOS the default is `~/Library/Application Support/Feynman Harness/data/`. Ordinary development defaults to
 repository `data/`. Backend activation and disabled-package task recovery use the same
 origin-aware writable path resolver; neither falls back to old community copies of core
