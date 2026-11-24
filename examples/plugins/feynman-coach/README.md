@@ -15,9 +15,14 @@ to try the explain-back, or skip it. If so, it poses `feynman_explain` for that
 node: a box with a text field (3-5 lines by default, one sentence in "short" mode
 — used when the node was small or every check on it landed on the first try) and
 a six-stop confidence bar (0/30/50/70/90/100, same ramp and colors as the native
-quiz confidence rail) the learner picks from, visually consistent with but
-independent of that core component — the plugin SDK does not expose the core
-component itself. A gap in the explanation gets exactly one named pointer back to
+quiz confidence rail) the learner picks from. The editor (`dist/main.js`) reuses
+the host's own global CSS: the "Your answer" field and the confidence row/rail/
+slider/value markup are built with the exact same Tailwind utility classNames as
+`components/question-dock.tsx`'s native quiz card and `components/answered-card.tsx`'s
+saved confidence record — those classes are already compiled into the app's
+stylesheet from the host's own usage, so the box picks up the identical look without
+restyling from scratch or importing the (core-internal, non-SDK) component itself.
+A gap in the explanation gets exactly one named pointer back to
 the node (never the answer) in ordinary prose, then the teacher re-poses the same
 box for a retry; at most two such rounds before the teacher gives the correct
 version itself in prose.
