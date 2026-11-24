@@ -55,6 +55,7 @@ Nonsecret settings are deltas in `<data root>/settings.json`; absent values reso
 | `DEEPGRAM_API_KEY` | Optional dictation token minting. |
 | `CHROME_PATH` | Chrome/Chromium executable fallback for demo verification; Electron's browser helper is primary. No extra Chromium is downloaded. |
 | `LH_ALLOWED_HOSTS` | Browser-only mode: extra host names the API accepts besides `localhost` and IP addresses. Comma-separated, case-insensitive, port ignored, no wildcards. |
+| `LH_SHARED_DATA_DIR` | Packaged Electron shell only (`electron/shared-data-dir.cjs`), not read by the dev/production server directly — points `DATA_DIR()` at another installed app's `data/` folder. See [sharing data with another installed app](getting-started.md#sharing-data-with-another-installed-learnharness-family-app). |
 
 Ordinary Next development can read `.env.local`. Real environment keys take precedence over saved keys. Saved auth is restrictive-permission plaintext, not an encrypted vault. Packaged Electron sets separate data/auth locations under `userData`; it does not use the repo development profile.
 

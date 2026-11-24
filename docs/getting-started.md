@@ -59,11 +59,20 @@ Chats, graph records, settings, and credentials live on your machine. Packaged d
 
 | OS | Learning-data folder |
 | --- | --- |
-| macOS | `~/Library/Application Support/LearnHarness/data` |
-| Windows | `%APPDATA%\LearnHarness\data` |
-| Linux | `$XDG_CONFIG_HOME/LearnHarness/data`, or `~/.config/LearnHarness/data` |
+| macOS | `~/Library/Application Support/Feynman Harness/data` |
+| Windows | `%APPDATA%\Feynman Harness\data` |
+| Linux | `$XDG_CONFIG_HOME/Feynman Harness/data`, or `~/.config/Feynman Harness/data` |
 
 API-key files sit beside `data`, not inside it. They are plaintext with restrictive file permissions, not an encrypted vault. Keep complete profiles private; do not share credential files or raw debug captures in bug reports.
+
+### Sharing data with another installed LearnHarness-family app
+
+This app has its own identity (app name, bundle/app ID, single-instance lock), so it runs independently of any other LearnHarness-family app on the same machine and never shares its `auth.json`, credentials, or `logs/` with one. The `data/` folder above (chats, graph, settings, jobs, plugins) can still be shared, so progress carries over, by pointing this app at the other app's `data/` folder — never its parent `userData` folder — with either:
+
+- the `LH_SHARED_DATA_DIR` environment variable, or
+- a `shared-data-dir.json` file placed in this app's own folder above (not the other app's), containing `{ "path": "<absolute path to the other app's data/ folder>" }` — for example `{ "path": "/Users/you/Library/Application Support/LearnHarness/data" }` on macOS.
+
+The environment variable wins when both are set. Without either, this app keeps its own, separate `data/`. Both apps keep writing the same on-disk record formats, so sharing stays safe only as long as neither app's own build is older than schema versions the other has already written.
 
 **Local storage does not mean local-only processing.** Configured models, subscription/CLI services, web research, and dictation can receive content. A local custom model is a separate setup choice, not an offline guarantee for other enabled services.
 
