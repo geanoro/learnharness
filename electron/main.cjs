@@ -32,6 +32,7 @@ const { createSubscriptions, loadSubscriptionSDK } = require("./subscriptions.cj
 const { attachSubscriptionChild, subscriptionControl } = require("./subscription-ipc.cjs");
 const { desktopAPIHeaders } = require("./desktop-api.cjs");
 const { openWebSubscriptionBrowser } = require("./web-subscription-browser.cjs");
+const { resolveSharedDataDir } = require("./shared-data-dir.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -43,17 +44,24 @@ const path = require("node:path");
 // renderer owns the number; this is the IPC widen target).
 const SIDEBAR_AUTOCLOSE = 928;
 
-const PRODUCT_NAME = "LearnHarness";
+const PRODUCT_NAME = "Feynman Harness";
 
 // APP NAME → userData (owner, 2026-10-10): the Application Support dir is
-// exactly "LearnHarness" in dev AND packaged. Packaged Electron would
+// exactly "Feynman Harness" in dev AND packaged. Packaged Electron would
 // otherwise derive it from package.json "name" (now lowercase
 // "learnharness"), and productName metadata alone doesn't reach app.name.
 // Must run before the LH_DEV_URL suffix below — dev becomes
-// "LearnHarness-dev".
+// "Feynman Harness-dev".
+//
+// Distinct identity (coexistence with the installed LearnHarness, owner
+// 2026-11-24): this fork keeps its own app name / appId (electron-builder.yml)
+// / userData root so macOS Launch Services, the single-instance lock, and
+// auth.json/credentials/logs never collide with a separately installed
+// LearnHarness. Only the data/ folder is meant to be shared — see
+// resolveSharedDataDir() below.
 app.setName(PRODUCT_NAME);
 const AUTH_FILE = () => path.join(app.getPath("userData"), "auth.json");
-const DATA_DIR = () => path.join(app.getPath("userData"), "data");
+const DATA_DIR = () => resolveSharedDataDir({ env: process.env, userDataDir: app.getPath("userData"), log }) ?? path.join(app.getPath("userData"), "data");
 
 // Resolve the saved palette before window creation; renderer reports keep
 // it current after live saves. This helper needs no compiled server bundle.
@@ -718,7 +726,7 @@ async function main() {
 		});
 		await subscriptions.ready;
 		log(`starting server: ${serverEntry()}`);
-		log(`data dir: ${DATA_DIR()}${fs.existsSync(AUTH_FILE()) ? " · auth.json: present" : " · auth.json: ABSENT (no BYOK keys yet)"}`);
+		log(`data dir: ${DATA_DIR()}${resolveSharedDataDir({ env: process.env, userDataDir: app.getPath("userData") }) ? " (shared override)" : ""}${fs.existsSync(AUTH_FILE()) ? " · auth.json: present" : " · auth.json: ABSENT (no BYOK keys yet)"}`);
 		await startServer(new URL(url).port);
 		await waitUntilUp(url);
 		log(`server up: ${url}`);
