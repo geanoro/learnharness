@@ -78,6 +78,13 @@ The default is the normal installed application's data folder:
 | macOS | `~/Library/Application Support/LearnHarness/data` |
 | Windows | `%APPDATA%\LearnHarness\data` |
 | Linux | `$XDG_CONFIG_HOME/LearnHarness/data`, or `~/.config/LearnHarness/data` |
+| macOS (Feynman Harness fork) | `~/Library/Application Support/Feynman Harness/data` |
+| Windows (Feynman Harness fork) | `%APPDATA%\Feynman Harness\data` |
+| Linux (Feynman Harness fork) | `$XDG_CONFIG_HOME/Feynman Harness/data`, or `~/.config/Feynman Harness/data` |
+
+When the shared-data setting (`LH_SHARED_DATA_DIR` or `shared-data-dir.json`,
+see `docs/getting-started.md`) is configured, both apps read the same `data/`
+folder.
 
 This is the directory **containing** `chats/` and `graph/`, not their parent
 `LearnHarness/` profile directory. For a moved installation, backup, development
