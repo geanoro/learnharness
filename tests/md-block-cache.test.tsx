@@ -20,6 +20,7 @@ import { afterEach, describe, it } from "node:test";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { parseHTML } from "linkedom";
+import postcss from "postcss";
 import { MessageResponse } from "../components/ai-elements/message.tsx";
 import {
 	MD_BLOCK_CACHE_MAX_CHARS,
@@ -204,56 +205,68 @@ describe("markdown block cache", () => {
 });
 
 describe("markdown block wrappers", () => {
-	const css = readFileSync("app/globals.css", "utf8");
+	// The stylesheet is parsed, not grepped: the assertions are over rules,
+	// their declarations and their enclosing at-rule.
+	const root = postcss.parse(readFileSync("app/globals.css", "utf8"));
+	type Rule = { selectors: string[]; decls: Map<string, string>; layer: string | null };
+	const rules: Rule[] = [];
+	root.walkRules((rule) => {
+		const decls = new Map<string, string>();
+		rule.each((n) => { if (n.type === "decl") decls.set(n.prop, n.value); });
+		const parent = rule.parent;
+		const layer = parent && parent.type === "atrule" ? `${(parent as postcss.AtRule).name} ${(parent as postcss.AtRule).params}` : null;
+		rules.push({ selectors: rule.selectors.map((x) => x.replace(/\s+/g, " ").trim()), decls, layer });
+	});
+	const declaring = (selector: string) => rules.filter((r) => r.selectors.includes(selector));
 
-	it("cost no box and keep streamdown's rhythm", () => {
-		assert.match(css, /\[data-md-block\]\s*\{\s*display: contents;\s*\}/,
-			"the wrapper creates no layout box");
-		// Tailwind v4 compiles the root's `space-y-4` to
-		// `:where(.space-y-4 > :not(:last-child)) { margin-block-end: 1rem }`.
-		// The replacement must keep BOTH halves of that: the zero specificity
-		// (so a heading's own mt-6/mb-2 still wins, as it does without the
-		// wrappers) and the bottom-margin form.
-		const spacing = /:where\(\.lh-prose > \[data-md-block\] > :not\(:last-child\)\),\s*:where\(\.lh-prose > \[data-md-block\]:not\(:last-child\) > :last-child\)\s*\{\s*margin-block-start: 0;\s*margin-block-end: 1rem;\s*\}/;
-		assert.match(css, spacing, "the 1rem fallback gap, inside a block and across block boundaries, at zero specificity");
-		// Zero specificity only means anything inside the layer: unlayered CSS
-		// wins over every layered rule regardless, which is how the first
-		// version of this rule beat the headings' own mt-6.
-		const layer = css.indexOf("@layer utilities");
-		assert.ok(layer >= 0 && css.indexOf(":where(.lh-prose > [data-md-block]") > layer,
-			"the replacements sit in the utilities layer, with the rules they stand in for");
-		assert.equal(/\[data-md-block\][^{]*\{[^}]*margin-top: 1rem/.test(css), false,
-			"no high-specificity gap rule: it would override the margins headings set for themselves");
-		assert.match(css, /\.lh-prose > \[data-md-block\]:first-child > :first-child\s*\{\s*margin-top: 0;\s*\}/,
-			"nothing above the first element");
-		assert.match(css, /\.lh-prose > \[data-md-block\]:last-child > :last-child\s*\{\s*margin-bottom: 0;\s*\}/,
-			"nothing below the last element");
+	it("cost no box", () => {
+		const [wrapper] = declaring("[data-md-block]");
+		assert.equal(wrapper?.decls.get("display"), "contents");
 	});
 
-	it("leave no descendant first/last-child trim to over-match", () => {
-		// Each block is its own wrapper, so EVERY paragraph is now the first
-		// and last child of something. A card that trimmed its markdown with
-		// `[&_p:first-child]:mt-0 [&_p:last-child]:mb-0` therefore flattened
-		// every paragraph in it — measured as collapsed gaps in three result
-		// cards. The markdown root's own `[&>*:first-child]` reset already
-		// does that trim, through the wrapper (globals.css).
-		for (const file of [
-			"components/plugin-worker-result.tsx",
-			"components/artifacts/plugin-worker-card.tsx",
-			"components/artifacts/job-card.tsx",
-		]) {
-			const source = readFileSync(file, "utf8");
-			assert.equal(source.includes("[&_p:first-child]"), false, `${file} trims through the wrapper, not by descendant`);
-			assert.equal(source.includes("[&_p:last-child]"), false, `${file} trims through the wrapper, not by descendant`);
+	it("keep streamdown's rhythm: zero specificity, inside the utilities layer", () => {
+		// Tailwind v4 compiles the root's `space-y-4` to a :where() rule (zero
+		// specificity, so a heading's own mt-6/mb-2 still wins) inside
+		// @layer utilities (unlayered CSS beats every layered rule regardless
+		// of specificity). The replacement must keep both properties.
+		const within = ":where(.lh-prose > [data-md-block] > :not(:last-child))";
+		const across = ":where(.lh-prose > [data-md-block]:not(:last-child) > :last-child)";
+		const [gap] = declaring(within);
+		assert.ok(gap, "gap rule exists");
+		assert.ok(gap.selectors.includes(across), "and covers the gap across block boundaries");
+		assert.equal(gap.decls.get("margin-block-end"), "1rem");
+		assert.equal(gap.layer, "layer utilities");
+		for (const r of rules) {
+			if (!r.selectors.some((x) => x.includes("[data-md-block]"))) continue;
+			assert.notEqual(r.decls.get("margin-top"), "1rem", `${r.selectors.join(", ")} would override headings' own margins`);
 		}
 	});
 
-	it("let the answered card keep its inline markdown", () => {
-		assert.match(css, /\.lh-md-inline > \[data-md-block\]:first-child > p:first-child\s*\{\s*display: inline;\s*margin: 0;\s*\}/);
-		const card = readFileSync("components/answered-card.tsx", "utf8");
-		assert.equal(card.includes("[&>p:first-child]"), false,
-			"the direct-child variant cannot reach through the wrapper any more");
-		assert.equal(card.match(/lh-md-inline/g)?.length, 2, "both inline answer lines use the rule");
+	it("trim the first and last element through the wrapper", () => {
+		assert.equal(declaring(".lh-prose > [data-md-block]:first-child > :first-child")[0]?.decls.get("margin-top"), "0");
+		assert.equal(declaring(".lh-prose > [data-md-block]:last-child > :last-child")[0]?.decls.get("margin-bottom"), "0");
+	});
+
+	it("let inline markdown reach its paragraph through the wrapper", async () => {
+		const [inline] = declaring(".lh-md-inline > [data-md-block]:first-child > p:first-child");
+		assert.equal(inline?.decls.get("display"), "inline");
+		assert.equal(inline?.decls.get("margin"), "0");
+		// The structure those selectors address, as rendered.
+		const { html } = await visit("A sentence.");
+		const { document: doc } = parseHTML(`<div class="lh-md-inline">${html}</div>`);
+		const first = doc.querySelector(".lh-md-inline [data-md-block]:first-child > p:first-child");
+		assert.ok(first, "the paragraph is a direct child of the first block wrapper");
+	});
+
+	it("put every block wrapper, and nothing else, directly under the markdown root", async () => {
+		const { html } = await visit("One.\n\nTwo.\n\n- three");
+		const { document: doc } = parseHTML(`<div id="host">${html}</div>`);
+		const wrappers = [...doc.querySelectorAll("[data-md-block]")];
+		assert.equal(wrappers.length, 3);
+		const rootEl = wrappers[0].parentElement;
+		assert.ok(wrappers.every((w) => w.parentElement === rootEl), "wrappers are siblings");
+		assert.equal(rootEl?.children.length, 3, "the root's direct children are exactly the wrappers");
+		for (const w of wrappers) assert.equal(w.children.length, 1, "one markdown element per wrapper");
 	});
 
 	it("wrap every block, cached or not, so a repeat visit has the same structure", async () => {
