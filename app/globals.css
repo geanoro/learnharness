@@ -722,6 +722,33 @@ body {
 	contain-intrinsic-block-size: auto 800px;
 }
 
+/* ONE estimate cannot serve every row: assistant grouping makes a group row
+   thousands of pixels tall while the parts inside it are hundreds, so the
+   marker carries the row kind and each kind estimates its own height.
+   A wrong estimate loses no content — it only makes the scroll height wrong
+   until Chromium has seen each row once and remembers the real size, which
+   is what `auto` is for. It is wrong exactly when it matters, though: right
+   after a switch nothing is remembered, so the estimates decide how far the
+   transcript reflows under the learner as they scroll back.
+   Fitted, not guessed: on a 237-message teaching transcript (47 source
+   passages, 57 answered cards) the real scroll height is 63,217px, and
+   these values reproduce it to within 2px, where the row medians (670/400)
+   undershot it by 4,922px (-7.8%). They are still a heuristic from ONE
+   transcript; a session shaped differently will sit off until its rows are
+   seen. */
+[data-older-transcript-row="passage"] {
+	contain-intrinsic-block-size: auto 745px;
+}
+[data-older-transcript-row="card"] {
+	contain-intrinsic-block-size: auto 445px;
+}
+
+/* scrollSessionTarget reads the target's box, so its row must be laid out,
+   not estimated. Paints nothing. */
+[data-older-transcript-row][data-lh-measuring] {
+	content-visibility: visible;
+}
+
 /* Source-message arrival: a brief, static theme-colored spotlight. */
 .lh-source-passage {
 	scroll-margin-top: 1rem;

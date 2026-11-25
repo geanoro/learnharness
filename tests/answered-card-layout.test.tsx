@@ -58,13 +58,13 @@ const quizQD = (): QuestionData => {
 	};
 };
 
-async function mount(adaptiveQuestions: boolean, toolCallId = "q1") {
+async function mount(adaptiveQuestions: boolean, toolCallId = "q1", olderRow = false) {
 	const host = document.createElement("div"); document.body.append(host);
 	const root = createRoot(host);
 	const answer = buildAnswer(quizQD(), { values: ["Zero"], confidence: 70, thinking: "Gravity keeps acting." });
 	await act(async () => root.render(
 		<AppearanceProvider initialAppearance={{ adaptiveQuestions }} initialTheme={DEFAULT_THEME}>
-			<AnsweredCard answer={answer} input={quizInput} toolCallId={toolCallId} />
+			<AnsweredCard answer={answer} input={quizInput} toolCallId={toolCallId} olderRow={olderRow} />
 		</AppearanceProvider>,
 	));
 	return { host, root };
@@ -143,4 +143,38 @@ test("the question card stand-in mirrors the pending card: options, I don't know
 	assert.equal(ask.question.textContent, "Question · select all that applyQctx");
 	assert.equal(ask.options.firstElementChild!.children.length, 2, "option + the empty Other field");
 	assert.equal(ask.confidence, null);
+});
+
+/* Off-screen containment must not reach the measurement.
+ *
+ * `content-visibility: auto` skips a subtree's layout, and the adaptive
+ * question layout measures this card's own rendered question, details and
+ * option labels through a probe inside the card — measuring a skipped
+ * subtree reads zeros and caches a wrong arrangement for the question's
+ * whole lifetime (`measured` keeps 256 entries). The card therefore drops
+ * the marker as soon as it nears the screen, which is one viewport before
+ * anything is measured. */
+test("answered card: contained while off screen, uncontained before it measures", async () => {
+	measurements = 0; near = [];
+	const { host, root } = await mount(true, "q4", true);
+	try {
+		const card = host.querySelector<HTMLElement>('[data-testid="answered-card"]')!;
+		assert.equal(card.getAttribute("data-older-transcript-row"), "card", "off screen it is contained");
+		assert.equal(measurements, 0, "nothing is measured off screen");
+		await comeNear();
+		assert.equal(card.getAttribute("data-older-transcript-row"), null, "containment is gone before the measurement");
+		assert.ok(measurements > 0, "the measurement still happens");
+		assert.equal(card.getAttribute("data-question-layout"), "columns", "and still solves the question card's columns");
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+test("answered card: a transcript row that is not older is never contained", async () => {
+	measurements = 0; near = [];
+	const { host, root } = await mount(true, "q5", false);
+	try {
+		const card = host.querySelector<HTMLElement>('[data-testid="answered-card"]')!;
+		assert.equal(card.getAttribute("data-older-transcript-row"), null);
+		await comeNear();
+		assert.equal(card.getAttribute("data-question-layout"), "columns");
+	} finally { await act(async () => root.unmount()); host.remove(); }
 });

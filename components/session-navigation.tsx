@@ -13,14 +13,30 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 	const node = "startContainer" in target ? target.startContainer : target;
 	const main = context?.scrollRef.current;
 	if (main?.contains(node)) context!.stopScroll();
-	for (let element = node.parentElement; element && scope.contains(element); element = element.parentElement) {
-		const view = element.ownerDocument.defaultView;
-		const style = typeof view?.getComputedStyle === "function" ? view.getComputedStyle(element) : null;
-		if (element !== main && (!style || !/(auto|scroll)/.test(style.overflowY) || element.scrollHeight <= element.clientHeight)) continue;
-		const rect = target.getBoundingClientRect();
-		const container = element.getBoundingClientRect();
-		element.scrollTo({ top: element.scrollTop + rect.top - container.top - 16, behavior: "instant" });
+	// A contained older row reports its size estimate until laid out; lay it out for the read.
+	const rows: HTMLElement[] = [];
+	for (let element = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement; element && scope.contains(element); element = element.parentElement) {
+		if (element.hasAttribute("data-older-transcript-row")) rows.push(element as HTMLElement);
 	}
+	for (const row of rows) row.setAttribute("data-lh-measuring", "");
+	try {
+		for (let element = node.parentElement; element && scope.contains(element); element = element.parentElement) {
+			const view = element.ownerDocument.defaultView;
+			const style = typeof view?.getComputedStyle === "function" ? view.getComputedStyle(element) : null;
+			if (element !== main && (!style || !/(auto|scroll)/.test(style.overflowY) || element.scrollHeight <= element.clientHeight)) continue;
+			const rect = target.getBoundingClientRect();
+			const container = element.getBoundingClientRect();
+			element.scrollTo({ top: element.scrollTop + rect.top - container.top - 16, behavior: "instant" });
+		}
+	} finally {
+		for (const row of rows) row.removeAttribute("data-lh-measuring");
+	}
+}
+
+/** Reveal a hash-jump target: spotlight it and scroll to it. */
+export function revealJumpTarget(target: HTMLElement, scope: HTMLElement, context: SessionScrollContext | null): void {
+	target.classList.add("lh-source-highlight");
+	scrollSessionTarget(target, scope, context);
 }
 
 /** React owns message markup; this controller adds no messages or content.
@@ -62,9 +78,8 @@ export function SessionMessageNavigation() {
 		if (!main || !target || !main.contains(target)) return false;
 		if (lastJump.current?.hash === hash && lastJump.current.target === target) return true;
 		stopScroll();
-		scrollSessionTarget(target, main, { scrollRef, stopScroll });
 		clearFlash();
-		target.classList.add("lh-source-highlight");
+		revealJumpTarget(target, main, { scrollRef, stopScroll });
 		flash.current = { target, timer: window.setTimeout(clearFlash, 2_000) };
 		lastJump.current = { hash, target };
 		return true;

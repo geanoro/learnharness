@@ -102,7 +102,7 @@ import { usePluginShortcutPage } from "@/components/plugin-shortcuts";
 import { createPluginSessionActionContext, type PluginSessionViewInput } from "@/src/core";
 import type { SessionInputViewReader, SessionViewTargets, NativeQuestionViewState, ViewReaderRef } from "./session-view-readers";
 import type { JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
-import { isSubagentSteer, newestLearnerTurnFrom } from "./transcript-rows";
+import { isSubagentSteer, newestLearnerTurnFrom, olderPartsFrom } from "./transcript-rows";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
 import {
 	CompactionCutDivider,
@@ -592,6 +592,10 @@ export function Chat({
 	const busy = localStream || turnInFlight || reconciliation !== "ready";
 	const busyRef = useRef(busy);
 	busyRef.current = busy;
+	// Containment inside a group (see olderPartsFrom): the group-level
+	// marker alone leaves most of a long transcript laid out, because
+	// grouping makes the rows after the newest learner turn enormous.
+	const olderPartsBefore = olderPartsFrom(messages.length, busy);
 	// The attach handoff (stream-reattach wave): the moment a resumed
 	// stream takes over the rendering — the SDK left "ready", so
 	// submitted/streaming means chunks are flowing — localStream covers
@@ -1927,7 +1931,17 @@ export function Chat({
 														const sourceId = textPartMessageId(part.id);
 														const anchor = sourceId && sourceTextParts.get(sourceId) === part.id ? messageAnchorId(sourceId) : undefined;
 														return (
-															<div key={part.id || pi} id={anchor} data-source-message-id={sourceId ?? undefined} className="lh-source-passage">
+															<div
+																key={part.id || pi}
+																id={anchor}
+																data-source-message-id={sourceId ?? undefined}
+																/* The transcript's prose IS the expensive row: 47 of
+																   them carry the markdown and KaTeX of a long session.
+																   Contained per part, because the group that holds them
+																   is one 25,000px row the group marker cannot skip. */
+																data-older-transcript-row={mi < olderPartsBefore ? "passage" : undefined}
+																className="lh-source-passage"
+															>
 																<MessageResponse>{part.text}</MessageResponse>
 															</div>
 														);
@@ -1970,7 +1984,7 @@ export function Chat({
 														// transcript; answered ones render as graded records.
 														if (part.state === "output-available") {
 															return (
-																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} toolCallId={part.toolCallId} />
+																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} toolCallId={part.toolCallId} olderRow={mi < olderPartsBefore} />
 															);
 														}
 														return null;
