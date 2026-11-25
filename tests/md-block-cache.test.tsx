@@ -230,6 +230,24 @@ describe("markdown block wrappers", () => {
 			"nothing below the last element");
 	});
 
+	it("leave no descendant first/last-child trim to over-match", () => {
+		// Each block is its own wrapper, so EVERY paragraph is now the first
+		// and last child of something. A card that trimmed its markdown with
+		// `[&_p:first-child]:mt-0 [&_p:last-child]:mb-0` therefore flattened
+		// every paragraph in it — measured as collapsed gaps in three result
+		// cards. The markdown root's own `[&>*:first-child]` reset already
+		// does that trim, through the wrapper (globals.css).
+		for (const file of [
+			"components/plugin-worker-result.tsx",
+			"components/artifacts/plugin-worker-card.tsx",
+			"components/artifacts/job-card.tsx",
+		]) {
+			const source = readFileSync(file, "utf8");
+			assert.equal(source.includes("[&_p:first-child]"), false, `${file} trims through the wrapper, not by descendant`);
+			assert.equal(source.includes("[&_p:last-child]"), false, `${file} trims through the wrapper, not by descendant`);
+		}
+	});
+
 	it("let the answered card keep its inline markdown", () => {
 		assert.match(css, /\.lh-md-inline > \[data-md-block\]:first-child > p:first-child\s*\{\s*display: inline;\s*margin: 0;\s*\}/);
 		const card = readFileSync("components/answered-card.tsx", "utf8");

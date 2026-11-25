@@ -29,7 +29,7 @@ export function PluginWorkerCard({ result, toolCallId }: { result: PluginBackgro
 	const part = pluginBackgroundPart(result, toolCallId);
 	const fallback = (
 		<div data-testid="plugin-worker-fallback" className="space-y-2 text-sm">
-			<div className="[&_p:first-child]:mt-0 [&_p:last-child]:mb-0"><MessageResponse>{result.text}</MessageResponse></div>
+			<div><MessageResponse>{result.text}</MessageResponse></div>
 			<details className="text-xs text-muted-foreground">
 				<summary className="cursor-pointer">Task details</summary>
 				<pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono">{JSON.stringify({
