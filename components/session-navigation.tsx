@@ -23,6 +23,20 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 	}
 }
 
+/** Reveal a jump target: exempt it from containment FIRST, then scroll.
+ *
+ * An older passage is contained (`content-visibility: auto`, globals.css)
+ * and a contained row reports its ESTIMATED block size, not its real one —
+ * so reading its box before it is laid out lands the scroll at the
+ * estimate. The spotlight class is what exempts the target from
+ * containment, so applying it first is what makes the landing position the
+ * passage's own. It is also the flash the learner sees; one class, two
+ * jobs. */
+export function revealJumpTarget(target: HTMLElement, scope: HTMLElement, context: SessionScrollContext | null): void {
+	target.classList.add("lh-source-highlight");
+	scrollSessionTarget(target, scope, context);
+}
+
 /** React owns message markup; this controller adds no messages or content.
  * Arrival on a full load is the browser's own hash scroll; this watcher owns
  * SPA arrivals (graph links) and later hash changes. The mount path polls on
@@ -62,9 +76,8 @@ export function SessionMessageNavigation() {
 		if (!main || !target || !main.contains(target)) return false;
 		if (lastJump.current?.hash === hash && lastJump.current.target === target) return true;
 		stopScroll();
-		scrollSessionTarget(target, main, { scrollRef, stopScroll });
 		clearFlash();
-		target.classList.add("lh-source-highlight");
+		revealJumpTarget(target, main, { scrollRef, stopScroll });
 		flash.current = { target, timer: window.setTimeout(clearFlash, 2_000) };
 		lastJump.current = { hash, target };
 		return true;

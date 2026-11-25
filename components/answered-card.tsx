@@ -40,7 +40,7 @@ function scrollParent(el: HTMLElement): HTMLElement | null {
  * client — the card reveals his answer, the committed correct answer, and
  * the explanation, with NO verdict chips (owner ruling 2026-09-27).
  */
-export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answer: QuestionAnswerData; input?: unknown; toolCallId?: string }) {
+export function AnsweredCard({ answer: savedAnswer, input, toolCallId, olderRow }: { answer: QuestionAnswerData; input?: unknown; toolCallId?: string; olderRow?: boolean }) {
 	const answer = answerForPresentation(savedAnswer, input);
 	const optionLetters = answeredOptionLetters(savedAnswer, input);
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
@@ -164,6 +164,20 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId }: { answe
 			className="rounded-xl border bg-card p-4 text-card-foreground [&>*:last-child]:mb-0"
 			data-testid="answered-card"
 			data-question-layout={columns ? "columns" : "stacked"}
+			/* Off-screen containment, dropped the moment the card nears the
+			   screen — BEFORE it is ever measured. `content-visibility: auto`
+			   skips the subtree's layout, and the adaptive question layout
+			   measures the rendered question, its details and its option
+			   labels through a probe inside this very card: measuring a
+			   skipped subtree reads zeros and would cache a wrong layout
+			   (`measured` keeps 256 of them). `near` turns true one viewport
+			   early and never turns back, and `request` stays null until the
+			   commit after it, so the attribute is already gone by the layout
+			   effect that measures. A card that has come near therefore stays
+			   uncontained for the rest of this mount; a session switch
+			   remounts it and containment applies again, which is the case
+			   this is for. */
+			data-older-transcript-row={olderRow && !near ? "card" : undefined}
 		>
 			{/* Two columns (Adapt question layout): question left; options,
 			    confidence and the answer right, centered; everything else full
