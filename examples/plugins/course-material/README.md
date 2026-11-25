@@ -153,7 +153,7 @@ nothing in the knowledge graph. The plugin's own state is two files in its
 `course-material/data/` when replacing `dist/`, and never distribute that data
 or place it in `dist/data/`.
 
-Disabling removes the instructions and the tool from future turns and leaves
+Disabling removes the tool from future turns and leaves
 existing transcripts alone.
 
 Off-network coverage: `tests/plugin-course-material-integration.test.ts` loads
