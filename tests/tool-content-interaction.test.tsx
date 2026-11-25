@@ -51,8 +51,16 @@ test("actual select → submit → saved result → historical Why uses source d
 		assert.equal(katexMatrixRows(host), 4, "question and revealed explanation retain their rows");
 		const paragraphs = host.querySelectorAll('[data-testid="tucked-explanation"] p');
 		assert.equal(paragraphs.length, 2, "recovered paragraphs remain distinct in Why");
-		assert.ok(paragraphs[0]!.parentElement!.classList.contains("[&>p:first-child]:inline"));
-		assert.ok(!paragraphs[0]!.parentElement!.classList.contains("[&_p]:inline"));
+		// The inline treatment is the first paragraph's alone, and it is CSS
+		// (globals.css `.lh-md-inline > [data-md-block]:first-child >
+		// p:first-child`) — so what this pins is the structure that rule
+		// needs: the prose root opts in, and this paragraph is the first
+		// child of the root's first markdown block.
+		const inlineRoot = paragraphs[0]!.closest(".lh-md-inline");
+		assert.ok(inlineRoot, "the explanation renders through the inline-markdown profile");
+		assert.ok(!inlineRoot!.classList.contains("[&_p]:inline"), "later paragraphs are not flattened with it");
+		assert.equal(paragraphs[0]!.parentElement, inlineRoot!.firstElementChild);
+		assert.ok(paragraphs[0]!.parentElement!.hasAttribute("data-md-block"));
 		const annotations = [...host.querySelectorAll('.katex[data-tex]')].map(n => n.getAttribute('data-tex'));
 		assert.equal(annotations.filter(t => t === String.raw`\nabla f`).length, 3);
 		assert.deepEqual(persisted.details, saved);
@@ -71,8 +79,11 @@ test("committed-answer reveals keep the first paragraph inline without flattenin
 		await act(async () => root.render(<AnsweredCard answer={answer} input={input} />));
 		const paragraphs = host.querySelectorAll("p");
 		assert.equal(paragraphs.length, 3, "question plus two committed-answer paragraphs");
-		assert.ok(paragraphs[1]!.parentElement!.classList.contains("[&>p:first-child]:inline"));
-		assert.ok(!paragraphs[1]!.parentElement!.classList.contains("[&_p]:inline"));
+		const inlineRoot = paragraphs[1]!.closest(".lh-md-inline");
+		assert.ok(inlineRoot, "the committed answer renders through the inline-markdown profile");
+		assert.ok(!inlineRoot!.classList.contains("[&_p]:inline"), "the second paragraph is not inlined with it");
+		assert.equal(paragraphs[1]!.parentElement, inlineRoot!.firstElementChild, "only the first block's first paragraph is reached");
+		assert.equal(paragraphs[2]!.parentElement, inlineRoot!.lastElementChild);
 		assert.equal(host.querySelectorAll(".katex-error").length, 0);
 		assert.deepEqual(answer, before);
 	} finally { await act(async () => root.unmount()); host.remove(); }
