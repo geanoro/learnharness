@@ -5,6 +5,7 @@ import type { LhViewMessage } from "@/src/core";
 import {
 	fullRange,
 	measuredHeights,
+	pendingAsk,
 	rangeCovers,
 	revealScrollTop,
 	rowIndexOf,
@@ -293,12 +294,15 @@ export function useTranscriptWindow({ messages, scroller, suspended, stopScroll 
 		};
 	}, [scroller, rewindow, measure, restoreReadingPosition, releaseReadingPosition]);
 
+	const asked = useRef<TranscriptAddress | null>(null);
+
 	// Opening a session, new messages, Find opening or closing.
 	useEffect(() => { rewindow(); }, [rows, suspended, rewindow]);
 
 	// Measure what was just built, then fill a viewport the estimates left
 	// short, bounded so a row whose height never settles cannot spin.
 	useIsoLayoutEffect(() => {
+		asked.current = pendingAsk(asked.current, rows, range);
 		const changed = measure();
 		const settled = restoreReadingPosition();
 		if (passes.current >= MAX_CONVERGENCE_PASSES) return;
@@ -317,7 +321,6 @@ export function useTranscriptWindow({ messages, scroller, suspended, stopScroll 
 	 * the estimated offset and the caller's own scroll — `scrollSessionTarget`,
 	 * once the row exists — puts the passage exactly where it belongs.
 	 */
-	const asked = useRef<string | null>(null);
 	const revealRow = useCallback((at: TranscriptAddress | undefined): "built" | "building" | "unknown" => {
 		if (!at) return "unknown";
 		const index = rowIndexOf(rowsRef.current, at);
@@ -326,14 +329,13 @@ export function useTranscriptWindow({ messages, scroller, suspended, stopScroll 
 			asked.current = null;
 			return "built";
 		}
-		const key = `${at.mi}:${at.pi}`;
 		// ONCE PER ASK. The callers poll — session-navigation retries every
 		// 64ms for as long as 20s — and re-issuing the scroll on every tick
 		// made this fight anything else moving the scroller: against a held
 		// reading position the two marched the transcript to its end in
 		// ~20,000px steps.
-		if (asked.current === key) return "building";
-		asked.current = key;
+		if (asked.current && asked.current.mi === at.mi && asked.current.pi === at.pi) return "building";
+		asked.current = at;
 		// A jump supersedes holding a place: the learner asked to be elsewhere.
 		releaseReadingPosition();
 		const el = scrollerRef.current;

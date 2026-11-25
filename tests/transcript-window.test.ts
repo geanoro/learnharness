@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
 	fullRange,
 	measuredHeights,
+	pendingAsk,
 	messageJumpTargets,
 	rangeCovers,
 	rowIndexOf,
@@ -219,5 +220,23 @@ describe("measuredHeights", () => {
 		const out = measuredHeights([entry("a", 500, 590), entry("b", 100, 180)]);
 		assert.equal(out.has("a"), false);
 		assert.equal(out.get("b"), 80);
+	});
+});
+
+describe("a reveal asks for a row once, until the window has built it", () => {
+	const rows = transcriptRows([learner("u1"), learner("u2"), learner("u3"), learner("u4")]);
+	const ask = { mi: 3, pi: null };
+	it("stays pending while the row is outside the window", () => {
+		assert.deepEqual(pendingAsk(ask, rows, { start: 0, end: 2 }), ask);
+	});
+	it("clears once the window covers the row, so a later ask for it scrolls again", () => {
+		let asked = pendingAsk(ask, rows, { start: 0, end: 2 });
+		asked = pendingAsk(asked, rows, { start: 2, end: 4 });
+		assert.equal(asked, null);
+		asked = pendingAsk(asked, rows, { start: 0, end: 2 });
+		assert.equal(asked, null);
+	});
+	it("clears when the row no longer exists", () => {
+		assert.equal(pendingAsk({ mi: 9, pi: null }, rows, { start: 0, end: 2 }), null);
 	});
 });

@@ -262,6 +262,15 @@ export function rowIndexOf(rows: readonly TranscriptRow[], { mi, pi }: Transcrip
 	return rows.findIndex((row) => row.mi === mi && row.pi === pi);
 }
 
+/** The row a reveal is still waiting on, or null once the window has built it
+ *  (or the row is gone). A reveal asks for a row once; this is what lets the
+ *  next ask for the same row, after the window has moved off it, scroll again. */
+export function pendingAsk(asked: TranscriptAddress | null, rows: readonly TranscriptRow[], range: RowRange): TranscriptAddress | null {
+	if (!asked) return null;
+	const index = rowIndexOf(rows, asked);
+	return index < 0 || (index >= range.start && index < range.end) ? null : asked;
+}
+
 /** The heights the two spacers must stand in for: everything before the
  *  window, and everything after it. */
 export function spacerHeights(rows: readonly TranscriptRow[], heights: ReadonlyMap<string, number>, range: RowRange): { before: number; after: number } {
