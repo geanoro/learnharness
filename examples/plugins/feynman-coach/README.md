@@ -56,10 +56,12 @@ native tool/question-type registration. It also exercises the question/answer
 schemas directly (accept/reject cases, including the confidence enum, the
 whitespace-only-explanation refinement, and the `dontKnow` branch), and drives a
 scripted teacher turn through a confident-but-gapped explanation to confirm the
-retry pose actually fires. `tests/plugin-feynman-coach-frontend.test.tsx` mounts
+retry pose actually fires. Its system-prompt assertions are a minimal wiring check
+only: they show the instruction text reaches the composed prompt, not that a live
+model grades differently. `tests/plugin-feynman-coach-frontend.test.tsx` mounts
 `dist/main.js`'s real editor and answered view (publish/dispose, the "I don't know"
-toggle, both render paths), and asserts its hand-copied class strings and color ramp
-against the live `components/question-dock.tsx`, `components/answered-card.tsx` and
-`components/confidence-rail.tsx` sources, so a core rename or restyle fails this test
-instead of silently drifting. This is not a claim of real-provider or human functional
+toggle and its draft retention, both render paths) and renders the real native
+`QuestionDock` and `AnsweredCard` side by side with them, comparing the class sets
+and rail paint each actually produced (never reading source text), so a core restyle
+fails this test instead of silently drifting. This is not a claim of real-provider or human functional
 acceptance of the teaching behavior.

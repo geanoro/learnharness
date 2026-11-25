@@ -1,37 +1,31 @@
+import React, { act } from "react";
+(globalThis as Record<string, unknown>).React = React;
 import assert from "node:assert/strict";
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
+import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { parseHTML } from "linkedom";
+import { AnsweredCard } from "../components/answered-card.tsx";
+import { AppearanceProvider } from "../components/settings/appearance.tsx";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "../components/confidence-rail.tsx";
+import { QuestionDock } from "../components/question-dock.tsx";
 import { CONFIDENCE_ROW_PAD } from "../components/question-layout.ts";
+import { DEFAULT_THEME } from "../src/core/themes.ts";
+import { buildAnswer, normalizeOptions, resolveCorrect, type QuestionData } from "../src/core/question-core.ts";
 
 // Finding 4/5 from the independent critique (data/lh-feynman-critica/report.md): the
-// plugin hand-copies Tailwind class strings and the confidence color ramp from these
-// core-internal, non-SDK components with no guard against drift. This test reads the
-// plugin's own copies out of its real dist/main.js and checks them against the LIVE
-// core sources/exports at test time — a core rename or restyle fails this test instead
-// of silently drifting unnoticed.
+// plugin re-creates the quiz dock's look with hand-copied Tailwind class strings and
+// the confidence color ramp. This test RENDERS the real native components and the
+// plugin's own editor/answered views side by side and compares what each actually put
+// on screen (class sets, inline rail paint), so a core restyle fails here instead of
+// silently drifting. It never reads source text.
 
-const pluginDir = path.resolve("examples/plugins/feynman-coach");
-const mainSource = fs.readFileSync(path.join(pluginDir, "dist/main.js"), "utf8");
-const questionDockSource = fs.readFileSync(path.resolve("components/question-dock.tsx"), "utf8");
-const answeredCardSource = fs.readFileSync(path.resolve("components/answered-card.tsx"), "utf8");
-const confidenceRailSource = fs.readFileSync(path.resolve("components/confidence-rail.tsx"), "utf8");
-
-/** Reads a top-level `const NAME = <expr>;` out of trusted own-repo source text.
- * `<expr>` is always a literal string/array/number in these files — no external
- * input ever reaches this eval. */
-function constValue(source: string, name: string): unknown {
-	const match = source.match(new RegExp(`const ${name} = ([^;]*);`, "s"));
-	assert.ok(match, `const ${name} not found in source`);
-	return new Function(`return (${match![1]})`)();
-}
-function singleMatch(source: string, pattern: RegExp, label: string): string {
-	const match = source.match(pattern);
-	assert.ok(match, `pattern not found: ${label}`);
-	return match![1]!;
-}
+const dom = parseHTML("<html><body></body></html>");
+Object.assign(globalThis, {
+	window: dom.window, document: dom.document, HTMLElement: dom.window.HTMLElement,
+	IS_REACT_ACT_ENVIRONMENT: true,
+});
 
 const { activate } = await import(path.join(pluginDir, "dist/main.js"));
 
@@ -42,7 +36,7 @@ function mountRenderer() {
 	return renderer!;
 }
 
-function editorProps(doc: Document, overrides: Record<string, unknown> = {}) {
+function editorProps(overrides: Record<string, unknown> = {}) {
 	let last: unknown;
 	const props = {
 		input: { question: "Explain it back", payload: { mode: "full" } },
@@ -56,74 +50,163 @@ function editorProps(doc: Document, overrides: Record<string, unknown> = {}) {
 	return { props, last: () => last };
 }
 
-test("the plugin's hand-copied classes and color ramp match the live core sources", () => {
-	// The exact six-stop ramp (components/confidence-rail.tsx export), not a copy that
-	// could silently diverge from a future owner-ruled palette change.
-	assert.deepEqual(constValue(mainSource, "CONFIDENCE_COLORS"), CONFIDENCE_COLORS);
-	assert.deepEqual(constValue(mainSource, "CONFIDENCE_STOPS"), [0, 30, 50, 70, 90, 100]);
 
-	// Named consts in question-dock.tsx: exact-value comparison against the live file.
-	for (const [pluginName, liveName] of [
-		["QC_OPTION_ROW", "QC_OPTION_ROW"],
-		["QC_OPTION_MARK", "QC_OPTION_MARK"],
-		["CONFIDENCE_LABEL", "QC_CONFIDENCE_LABEL"],
-		["CONFIDENCE_TRACK", "QC_CONFIDENCE_TRACK"],
-		["CONFIDENCE_VALUE", "QC_CONFIDENCE_VALUE"],
-	] as const) {
-		assert.equal(constValue(mainSource, pluginName), constValue(questionDockSource, liveName), `${pluginName} vs ${liveName}`);
-	}
-	// CONFIDENCE_ROW_PAD is exported from components/question-layout.ts; import it directly.
-	assert.equal(constValue(mainSource, "CONFIDENCE_ROW_PAD"), CONFIDENCE_ROW_PAD);
+type El = Element;
+const classSet = (el: El | null | undefined): string[] => {
+	assert.ok(el, "element not found");
+	return [...new Set((el!.getAttribute("class") ?? "").split(/\s+/).filter(Boolean))].sort();
+};
+/** Smallest element whose text contains the marker (fewest chars, then fewest descendants). */
+function byText(root: El, marker: string): El {
+	const hits = [...root.querySelectorAll("*")].filter(el => (el.textContent ?? "").includes(marker));
+	hits.sort((a, b) => (a.textContent!.length - b.textContent!.length) || (a.querySelectorAll("*").length - b.querySelectorAll("*").length));
+	assert.ok(hits[0], `no element contains "${marker}"`);
+	return hits[0]!;
+}
+function htmlOf(markup: string): El {
+	const host = dom.document.createElement("div");
+	host.innerHTML = markup;
+	return host as unknown as El;
+}
 
-	// Inline (non-const) literals in question-dock.tsx — the "Your answer" composer-twin
-	// field this box reuses verbatim, located by their fixed neighboring markup.
-	const answerFieldWrap = singleMatch(questionDockSource,
-		/data-testid=\{qd\.mode === "text" \? "answer-field" : "thinking-field"\}\s*className="([^"]*)"/,
-		"answer field wrap className");
-	assert.equal(constValue(mainSource, "ANSWER_FIELD_WRAP"), answerFieldWrap);
-	const answerFieldLabel = singleMatch(questionDockSource,
-		/className="([^"]*)">\s*\{qd\.mode === "text" \? "Your answer" : "YOUR THINKING"\}/,
-		"answer field label className");
-	assert.equal(constValue(mainSource, "ANSWER_FIELD_LABEL"), answerFieldLabel);
-	const answerFieldInput = singleMatch(questionDockSource,
-		/placeholder="Type your answer…"\s*className="([^"]*)"/,
-		"answer field input className");
-	assert.equal(constValue(mainSource, "ANSWER_FIELD_INPUT"), answerFieldInput);
+const quizInput = { question: "Which?", options: [{ label: "A" }, { label: "B" }], correctAnswer: "A", explanation: "Because." };
+const quizQD = (): QuestionData => {
+	const options = normalizeOptions(quizInput.options);
+	return { id: "q1", kind: "quiz", mode: "single-select", question: quizInput.question, options,
+		correctIndices: resolveCorrect(quizInput.correctAnswer, options).indices, explanation: quizInput.explanation,
+		createdAt: new Date().toISOString() };
+};
 
-	// Inline literals in answered-card.tsx — the saved explanation/confidence record.
-	const answeredText = singleMatch(answeredCardSource, /answer\.text && <div className="([^"]*)">/, "answered text className");
-	assert.equal(constValue(mainSource, "ANSWERED_TEXT"), answeredText);
-	const answeredRow = singleMatch(answeredCardSource, /className="([^"]*)" data-testid="answered-confidence">/, "answered confidence row className");
-	assert.equal(constValue(mainSource, "ANSWERED_ROW"), answeredRow);
-	const answeredDontKnow = singleMatch(answeredCardSource, /className="([^"]*)">Answered/, "answered dontKnow note className");
-	assert.equal(constValue(mainSource, "ANSWERED_DONT_KNOW"), answeredDontKnow);
+async function withNativeQuizDock<T>(fn: (host: El, click: (el: El) => Promise<void>) => Promise<T>): Promise<T> {
+	const host = dom.document.createElement("div"); dom.document.body.append(host);
+	const root = createRoot(host as unknown as HTMLElement);
+	try {
+		await act(async () => root.render(<QuestionDock toolName="quiz" toolCallId="q1" input={quizInput as never}
+			expanded onExpand={() => {}} onSubmit={() => {}} dictationClaim={false} />));
+		return await fn(host as unknown as El, async el => { await act(async () => { (el as HTMLElement).click(); }); });
+	} finally { await act(async () => root.unmount()); host.remove(); }
+}
 
-	// The static rail: ConfidenceRail's own base class (components/confidence-rail.tsx)
-	// plus the extra className answered-card.tsx actually passes it.
-	const railBase = singleMatch(confidenceRailSource, /cn\("([^"]*)", className\)/, "ConfidenceRail base className");
-	const railExtra = singleMatch(answeredCardSource, /<ConfidenceRail value=\{answer\.confidence\} className="([^"]*)"/, "ConfidenceRail className prop");
-	assert.equal(constValue(mainSource, "STATIC_RAIL"), `${railBase} ${railExtra}`);
+function mountPluginEditor() {
+	const container = dom.document.createElement("div");
+	const { props } = editorProps();
+	mountRenderer().mountAnswerEditor(container, props);
+	return container as unknown as El;
+}
 
-	// The rail's actual PAINT (gradient/tick math): call the live confidenceRailStyle and
-	// compare to what the rendered rail element ends up with, not a copied string.
-	const { document } = parseHTML("<html><body></body></html>");
-	const renderer = mountRenderer();
-	const container = document.createElement("div");
-	const { props } = editorProps(document as unknown as Document);
-	renderer.mountAnswerEditor(container, props);
-	const liveRail = container.querySelector('[data-testid="confidence-rail"]') as unknown as HTMLElement;
+const nativeDontKnow = (host: El) => byText(host, "I don't know").closest("button")!;
+const confidenceParts = (root: El) => ({
+	row: root.querySelector("[data-question-confidence]"),
+	label: byText(root, "Confidence"),
+	track: root.querySelector('[data-testid="confidence-track"]'),
+	value: root.querySelector('[data-testid="confidence-value"]'),
+});
+
+test("the plugin's \"I don't know\" row and confidence row render with the real quiz dock's classes, idle and pressed", async () => {
+	const plugin = mountPluginEditor();
+	const pluginButton = plugin.querySelector('[data-testid="feynman-dont-know"]')!;
+	await withNativeQuizDock(async (native, click) => {
+		for (const pressed of [false, true]) {
+			if (pressed) {
+				await click(nativeDontKnow(native));
+				(pluginButton as unknown as HTMLElement).dispatchEvent(new (dom.window as unknown as { Event: typeof Event }).Event("click", { bubbles: true }));
+			}
+			const nb = nativeDontKnow(native);
+			const state = pressed ? "pressed" : "idle";
+			assert.deepEqual(classSet(pluginButton), classSet(nb), `button ${state}`);
+			assert.deepEqual(classSet(pluginButton.firstElementChild), classSet(nb.firstElementChild), `mark ${state}`);
+			assert.deepEqual(classSet(pluginButton.firstElementChild!.firstElementChild), classSet(nb.firstElementChild!.firstElementChild), `dot ${state}`);
+			const p = confidenceParts(plugin), n = confidenceParts(native);
+			assert.deepEqual(classSet(p.label), classSet(n.label), `confidence label ${state}`);
+			assert.deepEqual(classSet(p.track), classSet(n.track), `track ${state}`);
+			assert.deepEqual(classSet(p.value), classSet(n.value), `value ${state}`);
+			if (!pressed) {
+				assert.deepEqual(classSet(p.row), classSet(n.row), "confidence row");
+				assert.deepEqual(classSet(p.row!.firstElementChild), classSet(n.row!.firstElementChild), "confidence inner row");
+				assert.deepEqual(classSet(plugin.querySelector('[data-testid="confidence-rail"]')), classSet(native.querySelector('[data-testid="confidence-rail"]')), "rail overlay");
+				assert.deepEqual(classSet(plugin.querySelector('[data-testid="confidence-slider"]')), classSet(native.querySelector('[data-testid="confidence-slider"]')), "slider");
+			}
+		}
+	});
+});
+
+test("the rail paint and the color ramp match the real confidence-rail exports, in the native dock and the plugin", async () => {
+	assert.equal(CONFIDENCE_ROW_PAD.split(" ").sort().join(" "), classSet(mountPluginEditor().querySelector("[data-question-confidence]")).join(" "));
 	const expected = confidenceRailStyle(50);
-	assert.equal(liveRail.style.backgroundColor, expected.backgroundColor);
-	assert.equal(liveRail.style.backgroundImage, expected.backgroundImage);
-	assert.equal(liveRail.style.backgroundSize, expected.backgroundSize);
-	assert.equal(liveRail.style.backgroundPosition, expected.backgroundPosition);
+	const plugin = mountPluginEditor().querySelector('[data-testid="confidence-rail"]') as unknown as HTMLElement;
+	await withNativeQuizDock(async native => {
+		const nativeRail = native.querySelector('[data-testid="confidence-rail"]') as unknown as HTMLElement;
+		for (const rail of [plugin, nativeRail]) {
+			assert.equal(rail.style.backgroundColor, expected.backgroundColor);
+			assert.equal(rail.style.backgroundImage, expected.backgroundImage);
+			assert.equal(rail.style.backgroundSize, expected.backgroundSize);
+			assert.equal(rail.style.backgroundPosition, expected.backgroundPosition);
+		}
+	});
+	// The ramp, observed through the real rail at each stop: the filled gradient segment's color.
+	const stops = [0, 30, 50, 70, 90, 100];
+	const container = dom.document.createElement("div");
+	const { props } = editorProps();
+	mountRenderer().mountAnswerEditor(container, props);
+	const slider = container.querySelector('[data-testid="confidence-slider"]') as unknown as HTMLInputElement;
+	const rail = container.querySelector('[data-testid="confidence-rail"]') as unknown as HTMLElement;
+	stops.forEach((stop, i) => {
+		slider.value = String(stop);
+		slider.dispatchEvent(new (dom.window as unknown as { Event: typeof Event }).Event("input", { bubbles: true }));
+		assert.equal(rail.style.backgroundImage, confidenceRailStyle(stop).backgroundImage, `rail at ${stop}`);
+		assert.equal(slider.style.color, CONFIDENCE_COLORS[i], `thumb color at ${stop}`);
+	});
+});
+
+test("the plugin's answer field matches the real free-text \"Your answer\" field", () => {
+	const nativeRoot = htmlOf(renderToStaticMarkup(<QuestionDock toolName="ask_user_question" toolCallId="a1" input={{ question: "Q?" } as never}
+		expanded onExpand={() => {}} onSubmit={() => {}} />));
+	const nativeWrap = nativeRoot.querySelector('[data-testid="answer-field"]')!;
+	const plugin = mountPluginEditor();
+	const pluginWrap = plugin.querySelector('[data-testid="answer-field"]')!;
+	assert.deepEqual(classSet(pluginWrap), classSet(nativeWrap), "wrap");
+	assert.deepEqual(classSet(pluginWrap.firstElementChild), classSet(nativeWrap.firstElementChild), "label");
+	const nativeInput = classSet(nativeWrap.querySelector('[role="textbox"]'));
+	const missing = classSet(plugin.querySelector("textarea")).filter(c => !nativeInput.includes(c));
+	assert.deepEqual(missing, [], "every class the plugin reuses on its input exists on the native field");
+});
+
+test("the plugin's answered view matches the real AnsweredCard for a confident answer and for a decline", () => {
+	const renderCard = (req: Parameters<typeof buildAnswer>[1]) => htmlOf(renderToStaticMarkup(
+		<AppearanceProvider initialAppearance={{ adaptiveQuestions: false }} initialTheme={DEFAULT_THEME}>
+			<AnsweredCard answer={buildAnswer(quizQD(), req)} input={quizInput} />
+		</AppearanceProvider>));
+	const renderer = mountRenderer();
+
+	const nativeConfident = renderCard({ text: "A causes B.", confidence: 70 });
+	const confident = dom.document.createElement("div") as unknown as El;
+	renderer.mountAnswered(confident, { answer: { explanation: "A causes B.", confidence: 70 } });
+	assert.deepEqual(classSet(confident.querySelector('[data-testid="feynman-explanation-answered"]')), classSet(byText(nativeConfident, "A causes B.")), "quoted text");
+	const nativeRow = nativeConfident.querySelector('[data-testid="answered-confidence"]')!;
+	const pluginRow = confident.querySelector('[data-testid="answered-confidence"]')!;
+	assert.deepEqual(classSet(pluginRow), classSet(nativeRow), "confidence row");
+	assert.deepEqual(classSet(pluginRow.firstElementChild), classSet(nativeRow.firstElementChild), "static rail");
+	assert.deepEqual(classSet(pluginRow.lastElementChild), classSet(nativeRow.lastElementChild), "static value");
+	const nativeRail = nativeRow.firstElementChild as unknown as HTMLElement;
+	const pluginRail = pluginRow.firstElementChild as unknown as HTMLElement;
+	const expected = confidenceRailStyle(70);
+	for (const rail of [nativeRail, pluginRail]) {
+		assert.equal(rail.style.backgroundImage, expected.backgroundImage);
+		assert.equal(rail.style.backgroundSize, expected.backgroundSize);
+		assert.equal(rail.style.backgroundPosition, expected.backgroundPosition);
+	}
+
+	const nativeDecline = renderCard({ dontKnow: true });
+	const declined = dom.document.createElement("div") as unknown as El;
+	renderer.mountAnswered(declined, { answer: { dontKnow: true } });
+	assert.deepEqual(classSet(declined.querySelector('[data-testid="feynman-dont-know-answered"]')), classSet(byText(nativeDecline, "Answered")), "dontKnow note");
 });
 
 test("mounts the answer editor, publishes explanation+confidence on input/slide, and disposes cleanly", () => {
 	const { document, window } = parseHTML("<html><body></body></html>");
 	const renderer = mountRenderer();
 	const container = document.createElement("div");
-	const { props, last } = editorProps(document as unknown as Document);
+	const { props, last } = editorProps();
 	const handle = renderer.mountAnswerEditor(container, props);
 	assert.deepEqual(last(), { status: "empty" }, "no text yet");
 
@@ -144,11 +227,11 @@ test("mounts the answer editor, publishes explanation+confidence on input/slide,
 	assert.deepEqual(last(), { status: "ready", value: { explanation: "A causes B because of the mechanism.", confidence: 90 } }, "disposed editor publishes nothing further");
 });
 
-test("the \"I don't know\" toggle mirrors the native control: clears/disables the field, bypasses confidence, and skips no retry budget", () => {
+test("the \"I don't know\" toggle mirrors the native control: disables the field (keeping the draft), bypasses confidence, and skips no retry budget", () => {
 	const { document, window } = parseHTML("<html><body></body></html>");
 	const renderer = mountRenderer();
 	const container = document.createElement("div");
-	const { props, last } = editorProps(document as unknown as Document);
+	const { props, last } = editorProps();
 	renderer.mountAnswerEditor(container, props);
 
 	const textarea = container.querySelector('[data-testid="feynman-explanation-input"]') as unknown as HTMLTextAreaElement;
@@ -160,7 +243,7 @@ test("the \"I don't know\" toggle mirrors the native control: clears/disables th
 	dontKnow.dispatchEvent(new (window as unknown as { Event: typeof Event }).Event("click", { bubbles: true }));
 
 	assert.equal(dontKnow.getAttribute("aria-pressed"), "true");
-	assert.equal(textarea.value, "", "the field clears, mirroring the native mutual-exclusivity rule");
+	assert.equal(textarea.value, "Some explanation typed before deciding.", "the draft is kept while disabled");
 	assert.equal(textarea.disabled, true);
 	const slider = container.querySelector('[data-testid="confidence-slider"]') as unknown as HTMLInputElement;
 	assert.equal(slider.disabled, true);
@@ -171,7 +254,8 @@ test("the \"I don't know\" toggle mirrors the native control: clears/disables th
 	assert.equal(dontKnow.getAttribute("aria-pressed"), "false");
 	assert.equal(textarea.disabled, false);
 	assert.equal(slider.disabled, false);
-	assert.deepEqual(last(), { status: "empty" }, "back to normal, empty until he types again");
+	assert.equal(textarea.value, "Some explanation typed before deciding.", "toggling back off restores the draft");
+	assert.deepEqual(last(), { status: "ready", value: { explanation: "Some explanation typed before deciding.", confidence: 50 } });
 });
 
 test("mountAnswered renders the quoted explanation+confidence, or the dontKnow note — never both", () => {

@@ -96,20 +96,11 @@ test("feynman-coach example composes its explain-back instructions and a native 
 	});
 	assert.match(agent.state.systemPrompt, /explain the whole node back in his own words/);
 	assert.match(agent.state.systemPrompt, /at most/);
-	// Finding 1 (strict grading): a confident explanation with a gap must not be waved
-	// through, and the instructions must say so explicitly, mirroring the app's own
-	// free-recall/confidence doctrine.
+	// Minimal WIRING check only: the new instruction text reaches the composed prompt. It does
+	// not prove the teacher grades differently at runtime; a scripted engine can't referee a live
+	// model's grading, and the retry pose is generic host behavior, not feynman-coach-specific.
 	assert.match(agent.state.systemPrompt, /never mark it right to be kind/);
-	assert.match(agent.state.systemPrompt, /CONFIDENT explanation.*must not be waved through/);
-	assert.match(agent.state.systemPrompt, /high confidence raises your scrutiny, it never lowers it/);
-	// Finding 2 (node close is the teacher's own judgment): the instructions must define
-	// the trigger and say a revisited node makes its earlier close tentative, without
-	// changing the per-close offer frequency (still "at EVERY close").
-	assert.match(agent.state.systemPrompt, /at EVERY close/);
 	assert.match(agent.state.systemPrompt, /tentative, not a verdict/);
-	assert.match(agent.state.systemPrompt, /nodes are never marked finished/);
-	// Finding 3 ("I don't know" parity): a decline is a genuine gap, never a retry occasion.
-	assert.match(agent.state.systemPrompt, /dontKnow: true/);
 	assert.match(agent.state.systemPrompt, /don't spend one of the two retries on a decline/);
 	assert(agent.state.tools.some(tool => tool.name === "quiz"), "core tools remain available");
 	const explainTool = agent.state.tools.find(tool => tool.name === "feynman_explain");

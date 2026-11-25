@@ -167,7 +167,6 @@ export function activate(ctx) {
       const onToggleDontKnow = () => {
         if (!active) return;
         dontKnow = !dontKnow;
-        if (dontKnow) textarea.value = "";
         renderDontKnow();
         publish();
       };
