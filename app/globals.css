@@ -743,10 +743,9 @@ body {
 	contain-intrinsic-block-size: auto 445px;
 }
 
-/* A jump target is read for its position (scrollSessionTarget reads its
-   box), so it must be laid out, not estimated: the spotlight class is
-   applied BEFORE the scroll for exactly this reason. */
-[data-older-transcript-row].lh-source-highlight {
+/* scrollSessionTarget reads the target's box, so its row must be laid out,
+   not estimated. Paints nothing. */
+[data-older-transcript-row][data-lh-measuring] {
 	content-visibility: visible;
 }
 

@@ -13,25 +13,24 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 	const node = "startContainer" in target ? target.startContainer : target;
 	const main = context?.scrollRef.current;
 	if (main?.contains(node)) context!.stopScroll();
-	for (let element = node.parentElement; element && scope.contains(element); element = element.parentElement) {
-		const view = element.ownerDocument.defaultView;
-		const style = typeof view?.getComputedStyle === "function" ? view.getComputedStyle(element) : null;
-		if (element !== main && (!style || !/(auto|scroll)/.test(style.overflowY) || element.scrollHeight <= element.clientHeight)) continue;
-		const rect = target.getBoundingClientRect();
-		const container = element.getBoundingClientRect();
-		element.scrollTo({ top: element.scrollTop + rect.top - container.top - 16, behavior: "instant" });
+	// A contained older row reports its size estimate until laid out; lay it out for the read.
+	const row = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-older-transcript-row]");
+	row?.setAttribute("data-lh-measuring", "");
+	try {
+		for (let element = node.parentElement; element && scope.contains(element); element = element.parentElement) {
+			const view = element.ownerDocument.defaultView;
+			const style = typeof view?.getComputedStyle === "function" ? view.getComputedStyle(element) : null;
+			if (element !== main && (!style || !/(auto|scroll)/.test(style.overflowY) || element.scrollHeight <= element.clientHeight)) continue;
+			const rect = target.getBoundingClientRect();
+			const container = element.getBoundingClientRect();
+			element.scrollTo({ top: element.scrollTop + rect.top - container.top - 16, behavior: "instant" });
+		}
+	} finally {
+		row?.removeAttribute("data-lh-measuring");
 	}
 }
 
-/** Reveal a jump target: exempt it from containment FIRST, then scroll.
- *
- * An older passage is contained (`content-visibility: auto`, globals.css)
- * and a contained row reports its ESTIMATED block size, not its real one —
- * so reading its box before it is laid out lands the scroll at the
- * estimate. The spotlight class is what exempts the target from
- * containment, so applying it first is what makes the landing position the
- * passage's own. It is also the flash the learner sees; one class, two
- * jobs. */
+/** Reveal a hash-jump target: spotlight it and scroll to it. */
 export function revealJumpTarget(target: HTMLElement, scope: HTMLElement, context: SessionScrollContext | null): void {
 	target.classList.add("lh-source-highlight");
 	scrollSessionTarget(target, scope, context);

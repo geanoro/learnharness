@@ -43,25 +43,39 @@ function harness() {
 	// spotlight class exempts it.
 	Object.defineProperty(target, "getBoundingClientRect", {
 		configurable: true,
-		value: () => ({ top: target.classList.contains("lh-source-highlight") ? REAL_TOP : ESTIMATE_TOP, bottom: 0, height: 0 }),
+		value: () => ({ top: target.hasAttribute("data-lh-measuring") ? REAL_TOP : ESTIMATE_TOP, bottom: 0, height: 0 }),
 	});
 	(dom.window as unknown as { getComputedStyle: unknown }).getComputedStyle = () => ({ overflowY: "auto" });
 	Object.defineProperty(document, "defaultView", { configurable: true, value: dom.window });
-	return { scroller, target, scrolled: () => scrolledTo };
+	return { scroller, target, document, scrolled: () => scrolledTo };
 }
 
 describe("reading position on a jump into a contained passage", () => {
-	it("exempts the target from containment before reading its box", () => {
-		const { scroller, target, scrolled } = harness();
-		revealJumpTarget(target as unknown as HTMLElement, scroller as unknown as HTMLElement, null);
-		assert.ok(target.classList.contains("lh-source-highlight"), "the spotlight is the containment exemption");
-		// scrollSessionTarget scrolls by (target.top - container.top - 16).
-		assert.equal(scrolled(), REAL_TOP - 16, "landed on the passage's own box");
-	});
-
-	it("without the exemption the same scroll lands on the estimate", () => {
+	it("lands on the passage's own box for an element target, painting nothing", () => {
 		const { scroller, target, scrolled } = harness();
 		scrollSessionTarget(target as unknown as HTMLElement, scroller as unknown as HTMLElement, null);
-		assert.equal(scrolled(), ESTIMATE_TOP - 16, "this is the defect the order avoids");
+		assert.equal(scrolled(), REAL_TOP - 16);
+		assert.ok(!target.classList.contains("lh-source-highlight"));
+		assert.ok(!target.hasAttribute("data-lh-measuring"), "exemption is restored");
+	});
+
+	it("lands on the real box for a Range inside the contained row", () => {
+		const { scroller, target, scrolled, document } = harness();
+		const text = document.createTextNode("passage text");
+		target.append(text);
+		const range = {
+			startContainer: text,
+			getBoundingClientRect: () => ({ top: target.hasAttribute("data-lh-measuring") ? REAL_TOP : ESTIMATE_TOP }),
+		};
+		scrollSessionTarget(range as unknown as Range, scroller as unknown as HTMLElement, null);
+		assert.equal(scrolled(), REAL_TOP - 16);
+		assert.ok(!target.classList.contains("lh-source-highlight"));
+	});
+
+	it("hash jump spotlights the target and lands on its real box", () => {
+		const { scroller, target, scrolled } = harness();
+		revealJumpTarget(target as unknown as HTMLElement, scroller as unknown as HTMLElement, null);
+		assert.ok(target.classList.contains("lh-source-highlight"));
+		assert.equal(scrolled(), REAL_TOP - 16);
 	});
 });
