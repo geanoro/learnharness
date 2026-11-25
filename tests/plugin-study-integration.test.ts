@@ -190,7 +190,7 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		// 80 long pages that ALL match: the caps decide the size, not the course.
 		const flood = Array.from({ length: 80 }, (_, i) =>
 			`--- Page ${i + 1} ---\n\nconsenso ${"prosa lunga che continua ".repeat(40)}`).join("\n\n");
-		await host.call("study", "putIndex", { course: "DISTSYS", label: "extra/lecture-04.pdf", markdown: flood, notices: [] });
+		await host.call("study", "putIndex", { course: "DISTSYS", label: "extra/lecture-04.pdf", markdown: flood, notices: [], size: fs.statSync(path.join(slides, "extra", "lecture-04.pdf")).size });
 		const tool = host.agentContributions({ chatId: chat.id, agent: "teacher" }, []).tools[0]!;
 		const flooded = await textOf(tool, { terms: ["consenso"] });
 		assert.ok(tokensOf(flooded) < 800, `a pathological course returned ${tokensOf(flooded)} tokens`);
