@@ -45,7 +45,7 @@ function harness() {
 		configurable: true,
 		value: () => ({ top: target.hasAttribute("data-lh-measuring") ? REAL_TOP : ESTIMATE_TOP, bottom: 0, height: 0 }),
 	});
-	(dom.window as unknown as { getComputedStyle: unknown }).getComputedStyle = () => ({ overflowY: "auto" });
+	(dom.window as unknown as { getComputedStyle: unknown }).getComputedStyle = (element: unknown) => ({ overflowY: element === scroller ? "auto" : "visible" });
 	Object.defineProperty(document, "defaultView", { configurable: true, value: dom.window });
 	return { scroller, target, document, scrolled: () => scrolledTo };
 }

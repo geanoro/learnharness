@@ -15,7 +15,7 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 	if (main?.contains(node)) context!.stopScroll();
 	// A contained older row reports its size estimate until laid out; lay it out for the read.
 	const rows: HTMLElement[] = [];
-	for (let element = node instanceof Element ? node : node.parentElement; element && scope.contains(element); element = element.parentElement) {
+	for (let element = node.nodeType === 1 ? (node as HTMLElement) : node.parentElement; element && scope.contains(element); element = element.parentElement) {
 		if (element.hasAttribute("data-older-transcript-row")) rows.push(element as HTMLElement);
 	}
 	for (const row of rows) row.setAttribute("data-lh-measuring", "");
