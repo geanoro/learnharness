@@ -781,25 +781,31 @@ body {
 	contain-intrinsic-block-size: auto 800px;
 }
 
-/* ONE estimate cannot serve every row: assistant grouping makes a group row
-   thousands of pixels tall while the parts inside it are hundreds, so the
-   marker carries the row kind and each kind estimates its own height.
+/* ONE estimate cannot serve every row: the parts inside an assistant group
+   are hundreds of pixels tall where the group is thousands, so the marker
+   carries the row kind and each kind estimates its own height.
    A wrong estimate loses no content — it only makes the scroll height wrong
    until Chromium has seen each row once and remembers the real size, which
    is what `auto` is for. It is wrong exactly when it matters, though: right
    after a switch nothing is remembered, so the estimates decide how far the
    transcript reflows under the learner as they scroll back.
-   Fitted, not guessed: on a 237-message teaching transcript (47 source
-   passages, 57 answered cards) the real scroll height is 63,217px, and
-   these values reproduce it to within 2px, where the row medians (670/400)
-   undershot it by 4,922px (-7.8%). They are still a heuristic from ONE
+   Fitted, not guessed, and the SAME numbers the transcript window reserves
+   for an unbuilt row (components/transcript-window.ts ROW_ESTIMATE) — a row
+   the browser is holding space for and a row the window is holding space for
+   have to be worth the same. Measured on a 241-message teaching transcript
+   with every row laid out: 48 passages average 625px, 64 answered cards
+   405px, 114 step rules 40px, 61 collapsed reasoning blocks 32px, 3 learner
+   turns 340px, over a 65,233px scroller. They are still a heuristic from ONE
    transcript; a session shaped differently will sit off until its rows are
    seen. */
 [data-older-transcript-row="passage"] {
-	contain-intrinsic-block-size: auto 745px;
+	contain-intrinsic-block-size: auto 625px;
 }
 [data-older-transcript-row="card"] {
-	contain-intrinsic-block-size: auto 445px;
+	contain-intrinsic-block-size: auto 405px;
+}
+[data-older-transcript-row="turn"] {
+	contain-intrinsic-block-size: auto 340px;
 }
 
 /* scrollSessionTarget reads the target's box, so its row must be laid out,

@@ -47,7 +47,13 @@ export function revealJumpTarget(target: HTMLElement, scope: HTMLElement, contex
  * frame-chained rAF proved cancellable mid-flight in dev (the owner's
  * every-link-lands-at-bottom report, 2026-10-13) — a synchronous tick that
  * retries until both elements exist has no cancellation window. */
-export function SessionMessageNavigation() {
+export function SessionMessageNavigation({ ensureBuilt }: {
+	/** Ask the transcript window to build a message's rows. The transcript
+	 *  only keeps what is near the viewport in the DOM, so a hash arrival
+	 *  naming a passage far above has nothing to find until it is asked for.
+	 *  The retry interval below is what waits for the render. */
+	ensureBuilt?: (messageId: string) => unknown;
+} = {}) {
 	const context = useStickToBottomContext();
 	// ABSORB IDENTITY CHURN (the 2026-10-13 heisenbug): use-stick-to-bottom
 	// re-creates stopScroll (and thus this context) while its initial scroll
@@ -66,6 +72,8 @@ export function SessionMessageNavigation() {
 		flash.current.target.classList.remove("lh-source-highlight");
 		flash.current = null;
 	}, []);
+	const builtRef = useRef(ensureBuilt);
+	builtRef.current = ensureBuilt;
 	/** Synchronous arrival: release the bottom-follow lock, scroll every
 	 * session container so the passage sits near the top, flash it. Returns
 	 * true when this hash is (now) jumped-to. */
@@ -74,6 +82,7 @@ export function SessionMessageNavigation() {
 		const hash = window.location.hash;
 		const messageId = messageIdFromHash(hash);
 		const main = scrollRef.current;
+		if (messageId) builtRef.current?.(messageId);
 		const target = messageId ? document.getElementById(messageAnchorId(messageId)) : null;
 		if (!main || !target || !main.contains(target)) return false;
 		if (lastJump.current?.hash === hash && lastJump.current.target === target) return true;
@@ -85,32 +94,44 @@ export function SessionMessageNavigation() {
 		return true;
 	}, [clearFlash]);
 
-	// Arrival on mount (a graph link opened this session, or a full load
-	// carried the hash): retry on a short interval until the scroller and the
-	// anchor both exist, then stop. The ~4s watchdog covers a never-arriving
-	// anchor (a deleted message) — the session simply opens where it opens.
-	useEffect(() => {
-		if (!window.location.hash) return;
+	/** Retry on a short interval until the scroller and the anchor both exist.
+	 *
+	 * Keep watching PAST the first success: hydration / record adoption can
+	 * REPLACE the node that was just jumped to (observed on cold dev loads,
+	 * 2026-10-13) — jump() re-targets the fresh node and re-flashes it, while
+	 * steady-state ticks are no-ops via the lastJump guard. ~20s watchdog
+	 * covers a cold compile (observed 6.8s SSR flush) or slow first load; a
+	 * deleted-message anchor gives up and the session opens as-is.
+	 *
+	 * The transcript only keeps what is near the viewport in the DOM, so this
+	 * interval is also what waits for `ensureBuilt`'s render: jump() asks for
+	 * the passage on every tick and finds it on the next one. */
+	const watch = useCallback(() => {
 		let ticks = 0;
 		const id = window.setInterval(() => {
-			// Keep watching PAST the first success: hydration / record adoption
-			// can REPLACE the node that was just jumped to (observed on cold
-			// dev loads, 2026-10-13) — jump() re-targets the fresh node and
-			// re-flashes it, while steady-state ticks are no-ops via the
-			// lastJump guard. ~20s watchdog covers a cold compile (observed
-			// 6.8s SSR flush) or slow first load; a deleted-message anchor
-			// gives up and the session opens as-is.
 			if (++ticks > 300) window.clearInterval(id);
 			else jump();
 		}, 64);
 		return () => window.clearInterval(id);
 	}, [jump]);
 
+	// Arrival on mount: a graph link opened this session, or a full load
+	// carried the hash.
 	useEffect(() => {
+		if (!window.location.hash) return;
+		return watch();
+	}, [watch]);
+
+	useEffect(() => {
+		let stop: (() => void) | null = null;
 		const onHash = () => {
 			lastJump.current = null;
 			clearFlash();
-			jump();
+			// A LATER hash change needs the same retry the mount path gets: the
+			// anchor's row may not be built yet, and one synchronous look
+			// cannot see the render that building it takes.
+			stop?.();
+			stop = jump() ? null : watch();
 		};
 		window.addEventListener("hashchange", onHash);
 		window.addEventListener("popstate", onHash);
@@ -119,7 +140,8 @@ export function SessionMessageNavigation() {
 		return () => {
 			window.removeEventListener("hashchange", onHash);
 			window.removeEventListener("popstate", onHash);
+			stop?.();
 		};
-	}, [jump, clearFlash]);
+	}, [jump, clearFlash, watch]);
 	return null;
 }
