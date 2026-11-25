@@ -1,0 +1,10 @@
+{
+  "apiVersion": 1,
+  "id": "study",
+  "name": "Study",
+  "version": "1.0.0",
+  "minAppVersion": "0.7.0",
+  "description": "One plugin for the study loop: an explain-back checkpoint when a plan node closes, course slides reached only through a librarian that answers with their own text and page numbers, and the learner's Logseq notes as teacher context. No core edits, no persisted format/schema changes, no learning-data writes.",
+  "main": "main.js",
+  "backend": "backend.cjs"
+}

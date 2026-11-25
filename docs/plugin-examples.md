@@ -287,6 +287,20 @@ as directly by the primary sources:
   factory receives — nothing without a configured course, one line without a selected
   one, the rules only where they apply — with a hard cap on one reply's size. It lives
   in the repository checkout and is not part of the downloaded authoring kit.
+- Study (`examples/plugins/study/`): the consolidated study plugin, merging the two
+  recipes above and adding a librarian over an on-disk index of the slides' own text.
+  Read its `dist/backend.cjs` with `dist/librarian.cjs`, `dist/phase.cjs` and
+  `dist/main.js`. Three things it demonstrates that nothing else here does: building an
+  index from the host's own PDF conversion, which is frontend-only and takes a browser
+  `File`, so a native `<input type="file" webkitdirectory>` plus
+  `window.lh.getPathForFile` supplies both the files and the folder's path in one
+  gesture; sizing a per-turn contribution by the session's PHASE, folded from one record
+  through `ctx.learning.getSession` rather than from `listSessions()`, which reads every
+  chat file; and a deterministic ranked search that answers with verbatim page excerpts,
+  so the reply cannot be a summary by construction rather than by instruction. It
+  registers no instructions at all and reaches a true zero per turn when nothing is
+  configured. It lives in the repository checkout and is not part of the downloaded
+  authoring kit.
 
 Explicitly running their agents/workers may incur configured-provider costs. Reading,
 copying or enabling examples is not permission to make model requests. For APIs not
