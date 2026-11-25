@@ -194,8 +194,14 @@ const jobs: Job[] = [];
 let scheduled = false;
 
 /** Serializing a transcript's worth of blocks is real work; it must not land
- *  inside the switch it is meant to make cheaper. Idle time, in slices. */
-const CAPTURE_BUDGET_MS = 8;
+ *  inside the switch it is meant to make cheaper. The browser says how much
+ *  of its idle window is left and that answer is authoritative — an 8 ms
+ *  slice taken without asking overran the gaps between React's own transition
+ *  slices and cost the first switch about a second of settle time in half the
+ *  measured runs. This budget applies only where there is no deadline to
+ *  honour: a forced idle run (didTimeout) and the no-requestIdleCallback
+ *  fallback. */
+const CAPTURE_FORCED_MS = 4;
 const CAPTURE_IDLE_TIMEOUT_MS = 1_000;
 
 /** A queued job holds a DOM node, often a detached one. Idle callbacks are
@@ -204,32 +210,45 @@ const CAPTURE_IDLE_TIMEOUT_MS = 1_000;
  *  than held. Dropping an offer costs one uncached block. */
 const CAPTURE_QUEUE_MAX = 4_000;
 
-type IdleHost = { requestIdleCallback?: (cb: () => void, options?: { timeout: number }) => unknown };
+type IdleDeadline = { timeRemaining: () => number; didTimeout: boolean };
+type IdleHost = { requestIdleCallback?: (cb: (deadline: IdleDeadline) => void, options?: { timeout: number }) => unknown };
 
 function schedule(): void {
 	if (scheduled || jobs.length === 0) return;
 	scheduled = true;
-	const run = () => {
-		scheduled = false;
-		drain(CAPTURE_BUDGET_MS);
-	};
 	const idle = (globalThis as IdleHost).requestIdleCallback;
-	if (typeof idle === "function") idle(run, { timeout: CAPTURE_IDLE_TIMEOUT_MS });
-	else setTimeout(run, 0);
+	if (typeof idle === "function") {
+		idle((deadline) => {
+			scheduled = false;
+			drain(deadline);
+		}, { timeout: CAPTURE_IDLE_TIMEOUT_MS });
+	} else {
+		setTimeout(() => {
+			scheduled = false;
+			drain(undefined);
+		}, 0);
+	}
 }
 
-function drain(budgetMs: number): void {
+/** Capture what fits in the window the browser is offering, then come back
+ *  for the rest. */
+function drain(deadline: IdleDeadline | undefined): void {
 	const started = performance.now();
 	while (jobs.length > 0) {
+		// A forced run reports no time remaining at all, so it takes the
+		// fixed slice rather than nothing.
+		const left = deadline && !deadline.didTimeout
+			? deadline.timeRemaining()
+			: CAPTURE_FORCED_MS - (performance.now() - started);
+		if (left <= 1) break;
 		capture(jobs.shift()!);
-		if (performance.now() - started >= budgetMs) break;
 	}
 	schedule();
 }
 
 /** Test seam: run every queued capture now, with no idle wait. */
 export function flushMdBlockCaptures(): void {
-	drain(Number.POSITIVE_INFINITY);
+	while (jobs.length > 0) capture(jobs.shift()!);
 }
 
 function capture({ node, key, owner, ownerRef }: Job): void {
