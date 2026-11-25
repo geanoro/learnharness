@@ -239,27 +239,37 @@ body {
    `display: contents` leaves no box, so the markdown elements stay direct
    participants of the prose flow and margins collapse exactly as before.
 
-   What they DO displace is streamdown's root `space-y-4` and its
-   first/last-child margin reset, which address the root's direct children —
-   now the wrappers. These four rules put that rhythm back where it was: one
-   1rem gap between every pair of adjacent top-level elements (whichever
-   blocks they come from), nothing above the first, nothing below the last.
-   The order matters: the `:first-child` reset must follow the 1rem rule it
-   overrides, which carries the same specificity. */
+   What they DO displace is streamdown's root `space-y-4` and the message
+   renderer's own first/last-child reset, which address the root's DIRECT
+   children — now the wrappers. The rules below put both back on the real
+   elements.
+
+   The spacing rule must be reproduced exactly, not approximated. Tailwind v4
+   compiles `space-y-4` to `:where(.space-y-4 > :not(:last-child))` — a ZERO
+   specificity rule setting margin-block-end: 1rem, which every element's own
+   margin utility overrides. So a heading keeps its mt-6 above and its mb-2
+   below (24px then 8px), and only elements with no margin of their own fall
+   back to the 1rem gap. A high-specificity `margin-top: 1rem` between every
+   pair looks the same in total height but flattens that: measured against
+   the built page, it moved every heading 8px away from the text it belongs
+   to. Hence :where() here too, and margin-block-end rather than -start:
+   same rule, re-aimed through the wrapper, inside a block and across the
+   boundary to the next one. */
 [data-md-block] {
 	display: contents;
 }
 
-[data-md-block] > :not([hidden]) ~ :not([hidden]),
-[data-md-block] ~ [data-md-block] > :first-child {
-	margin-top: 1rem;
+:where(.lh-prose > [data-md-block] > :not(:last-child)),
+:where(.lh-prose > [data-md-block]:not(:last-child) > :last-child) {
+	margin-block-start: 0;
+	margin-block-end: 1rem;
 }
 
-[data-md-block]:first-child > :first-child {
+.lh-prose > [data-md-block]:first-child > :first-child {
 	margin-top: 0;
 }
 
-[data-md-block]:last-child > :last-child {
+.lh-prose > [data-md-block]:last-child > :last-child {
 	margin-bottom: 0;
 }
 

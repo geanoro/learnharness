@@ -209,12 +209,18 @@ describe("markdown block wrappers", () => {
 	it("cost no box and keep streamdown's rhythm", () => {
 		assert.match(css, /\[data-md-block\]\s*\{\s*display: contents;\s*\}/,
 			"the wrapper creates no layout box");
-		assert.match(css, /\[data-md-block\] > :not\(\[hidden\]\) ~ :not\(\[hidden\]\),\s*\[data-md-block\] ~ \[data-md-block\] > :first-child\s*\{\s*margin-top: 1rem;\s*\}/,
-			"one 1rem gap between adjacent top-level elements, across block boundaries");
-		const reset = css.indexOf("[data-md-block]:first-child > :first-child");
-		const gap = css.indexOf("[data-md-block] ~ [data-md-block] > :first-child");
-		assert.ok(gap >= 0 && reset > gap, "the first-child reset follows the rule it overrides");
-		assert.match(css, /\[data-md-block\]:last-child > :last-child\s*\{\s*margin-bottom: 0;\s*\}/,
+		// Tailwind v4 compiles the root's `space-y-4` to
+		// `:where(.space-y-4 > :not(:last-child)) { margin-block-end: 1rem }`.
+		// The replacement must keep BOTH halves of that: the zero specificity
+		// (so a heading's own mt-6/mb-2 still wins, as it does without the
+		// wrappers) and the bottom-margin form.
+		const spacing = /:where\(\.lh-prose > \[data-md-block\] > :not\(:last-child\)\),\s*:where\(\.lh-prose > \[data-md-block\]:not\(:last-child\) > :last-child\)\s*\{\s*margin-block-start: 0;\s*margin-block-end: 1rem;\s*\}/;
+		assert.match(css, spacing, "the 1rem fallback gap, inside a block and across block boundaries, at zero specificity");
+		assert.equal(/\[data-md-block\][^{]*\{[^}]*margin-top: 1rem/.test(css), false,
+			"no high-specificity gap rule: it would override the margins headings set for themselves");
+		assert.match(css, /\.lh-prose > \[data-md-block\]:first-child > :first-child\s*\{\s*margin-top: 0;\s*\}/,
+			"nothing above the first element");
+		assert.match(css, /\.lh-prose > \[data-md-block\]:last-child > :last-child\s*\{\s*margin-bottom: 0;\s*\}/,
 			"nothing below the last element");
 	});
 
