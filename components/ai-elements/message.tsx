@@ -36,6 +36,7 @@ import {
   type StreamdownProps,
 } from "streamdown";
 import { mdComponents } from "@/components/md-blocks";
+import { CachedBlock, MdBlockLiveContext } from "@/components/md-block-cache";
 import { repairMathForDisplay, transformMathDelimiters } from "@/src/core";
 import { rehypeGluePunctuation } from "@/components/md-nobreak";
 
@@ -328,7 +329,12 @@ export const MessageBranchPage = ({
   );
 };
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
+export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
+  /** This text is still being written (the streaming part of a turn). It
+   *  keeps the block cache from remembering half-written output; see
+   *  components/md-block-cache.tsx. Not forwarded to Streamdown. */
+  live?: boolean;
+};
 
 // Type-only version skew: @streamdown/code bundles shiki@3 types while
 // streamdown@2.5 expects shiki@4 types. Both work at runtime (each ships its
@@ -385,7 +391,7 @@ export const streamdownRehypePlugins = [
 ] as NonNullable<StreamdownProps["rehypePlugins"]>;
 
 export const MessageResponse = memo(
-  ({ className, children, ...props }: MessageResponseProps) => {
+  ({ className, children, live = false, ...props }: MessageResponseProps) => {
     // Legacy backslash delimiters are converted in a single linear scan;
     // native dollar math passes through to Streamdown unchanged. Incomplete
     // legacy spans are left for a later render when their closer arrives.
@@ -395,6 +401,7 @@ export const MessageResponse = memo(
         : children;
 
     return (
+      <MdBlockLiveContext.Provider value={live}>
       <Streamdown
         className={cn(
           // Source Sans 3 + emphasis-color tokens on every markdown surface
@@ -406,15 +413,23 @@ export const MessageResponse = memo(
         plugins={streamdownPlugins}
         rehypePlugins={streamdownRehypePlugins}
         remend={streamdownRemend}
+        // Rendered blocks are remembered across mounts (md-block-cache.tsx):
+        // a lesson switch unmounts the transcript, and without this every
+        // message is re-parsed (plus KaTeX) on the way back in. Only blocks
+        // with no interactive output are cached; `mode="static"` surfaces
+        // render in one pass and never reach this seam.
+        BlockComponent={CachedBlock}
         {...props}
       >
         {content}
       </Streamdown>
+      </MdBlockLiveContext.Provider>
     );
   },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
-    nextProps.isAnimating === prevProps.isAnimating
+    nextProps.isAnimating === prevProps.isAnimating &&
+    nextProps.live === prevProps.live
 );
 
 MessageResponse.displayName = "MessageResponse";

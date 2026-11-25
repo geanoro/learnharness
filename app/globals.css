@@ -232,6 +232,46 @@ body {
 	font-weight: var(--lh-heading-weight, 900);
 }
 
+/* MARKDOWN BLOCK WRAPPERS (cross-mount block cache, 2026-11-25):
+   components/md-block-cache.tsx wraps every streamdown block in
+   `<div data-md-block>` so a rendered block can be read back out of the DOM
+   and handed to the next visit as HTML. The wrapper must cost nothing:
+   `display: contents` leaves no box, so the markdown elements stay direct
+   participants of the prose flow and margins collapse exactly as before.
+
+   What they DO displace is streamdown's root `space-y-4` and its
+   first/last-child margin reset, which address the root's direct children —
+   now the wrappers. These four rules put that rhythm back where it was: one
+   1rem gap between every pair of adjacent top-level elements (whichever
+   blocks they come from), nothing above the first, nothing below the last.
+   The order matters: the `:first-child` reset must follow the 1rem rule it
+   overrides, which carries the same specificity. */
+[data-md-block] {
+	display: contents;
+}
+
+[data-md-block] > :not([hidden]) ~ :not([hidden]),
+[data-md-block] ~ [data-md-block] > :first-child {
+	margin-top: 1rem;
+}
+
+[data-md-block]:first-child > :first-child {
+	margin-top: 0;
+}
+
+[data-md-block]:last-child > :last-child {
+	margin-bottom: 0;
+}
+
+/* Markdown that joins a sentence instead of opening a block (the answered
+   card's "his answer / the committed answer" lines). The block wrapper now
+   sits between the prose root and that first paragraph, so the rule reaches
+   through it. */
+.lh-md-inline > [data-md-block]:first-child > p:first-child {
+	display: inline;
+	margin: 0;
+}
+
 /* lh-input (owner, typography round 2): lh-prose's 1.5 READING leading
    makes typing carets tower over the glyphs — the caret fills the line
    box (24px at 16px text, ~2× the glyph height). Inputs are not

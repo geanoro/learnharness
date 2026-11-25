@@ -136,7 +136,7 @@ export function SideThreadBody({ state, chatId, draft, readDraft, dictation, onD
 					</div>
 				))}
 				{state.answering && <div data-testid="side-streaming-answer" className="text-sm">
-					{state.streamText ? <MessageResponse>{state.streamText}</MessageResponse> : <BrailleSpinner label="Answering" />}
+					{state.streamText ? <MessageResponse live>{state.streamText}</MessageResponse> : <BrailleSpinner label="Answering" />}
 				</div>}
 				{state.error && <p role="alert" className="text-xs text-destructive">{state.error}</p>}
 				{!state.answering && (last?.role === "user" || (last?.role === "assistant" && last.error !== undefined)) && (
