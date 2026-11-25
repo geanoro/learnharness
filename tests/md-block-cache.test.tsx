@@ -216,6 +216,12 @@ describe("markdown block wrappers", () => {
 		// wrappers) and the bottom-margin form.
 		const spacing = /:where\(\.lh-prose > \[data-md-block\] > :not\(:last-child\)\),\s*:where\(\.lh-prose > \[data-md-block\]:not\(:last-child\) > :last-child\)\s*\{\s*margin-block-start: 0;\s*margin-block-end: 1rem;\s*\}/;
 		assert.match(css, spacing, "the 1rem fallback gap, inside a block and across block boundaries, at zero specificity");
+		// Zero specificity only means anything inside the layer: unlayered CSS
+		// wins over every layered rule regardless, which is how the first
+		// version of this rule beat the headings' own mt-6.
+		const layer = css.indexOf("@layer utilities");
+		assert.ok(layer >= 0 && css.indexOf(":where(.lh-prose > [data-md-block]") > layer,
+			"the replacements sit in the utilities layer, with the rules they stand in for");
 		assert.equal(/\[data-md-block\][^{]*\{[^}]*margin-top: 1rem/.test(css), false,
 			"no high-specificity gap rule: it would override the margins headings set for themselves");
 		assert.match(css, /\.lh-prose > \[data-md-block\]:first-child > :first-child\s*\{\s*margin-top: 0;\s*\}/,

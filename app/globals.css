@@ -254,23 +254,32 @@ body {
    the built page, it moved every heading 8px away from the text it belongs
    to. Hence :where() here too, and margin-block-end rather than -start:
    same rule, re-aimed through the wrapper, inside a block and across the
-   boundary to the next one. */
+   boundary to the next one.
+
+   The replacements live in @layer utilities, where the rules they stand in
+   for live. Unlayered CSS beats every layered rule whatever its specificity
+   (the rest of this file relies on exactly that), so an unlayered :where()
+   is not zero-weight at all — it silently won over `mt-6` and cost each
+   heading the same 8px. Inside the layer the ordinary cascade applies
+   again. */
 [data-md-block] {
 	display: contents;
 }
 
-:where(.lh-prose > [data-md-block] > :not(:last-child)),
-:where(.lh-prose > [data-md-block]:not(:last-child) > :last-child) {
-	margin-block-start: 0;
-	margin-block-end: 1rem;
-}
+@layer utilities {
+	:where(.lh-prose > [data-md-block] > :not(:last-child)),
+	:where(.lh-prose > [data-md-block]:not(:last-child) > :last-child) {
+		margin-block-start: 0;
+		margin-block-end: 1rem;
+	}
 
-.lh-prose > [data-md-block]:first-child > :first-child {
-	margin-top: 0;
-}
+	.lh-prose > [data-md-block]:first-child > :first-child {
+		margin-top: 0;
+	}
 
-.lh-prose > [data-md-block]:last-child > :last-child {
-	margin-bottom: 0;
+	.lh-prose > [data-md-block]:last-child > :last-child {
+		margin-bottom: 0;
+	}
 }
 
 /* Markdown that joins a sentence instead of opening a block (the answered
