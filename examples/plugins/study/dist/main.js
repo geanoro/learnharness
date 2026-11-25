@@ -223,7 +223,7 @@ export function activate(ctx) {
 		name.placeholder = "Course name";
 		const logseqName = element("input", FIELD, form);
 		logseqName.setAttribute("aria-label", "Logseq course name");
-		logseqName.placeholder = "Logseq [[COURSE]] (optional)";
+		logseqName.placeholder = "Logseq [[COURSE]]";
 
 		const resolver = pathResolver();
 		let picked = "";

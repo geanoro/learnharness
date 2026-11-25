@@ -309,7 +309,7 @@ exports.activate = ctx => {
 						label: "course library",
 						description: full
 							? `The learner picked the course "${selection.course}" for this session`
-								+ `${selection.decks.length ? ` and ticked ${selection.decks.length} deck(s)` : ""}. ${LIBRARY_RULES}`
+								+ `${selection.decks.length ? ` and ticked ${selection.decks.length} deck${selection.decks.length === 1 ? "" : "s"}` : ""}. ${LIBRARY_RULES}`
 							: LIBRARY_POINTER,
 						parameters: {
 							type: "object",

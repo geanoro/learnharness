@@ -288,9 +288,13 @@ function renderSearch({ course, decks, terms, limits, unindexed }) {
 			+ "Tell the learner to open the Study picker and press Index to include them."
 		: "";
 	if (!result.hits.length) {
-		return `Nothing in the indexed slides of "${course}" matches: ${asked}.${missing}\n\n`
-			+ `${imageOnlyNote(decks)}`.trim()
-			+ "\nSay the slides do not cover it, then teach it yourself and mark it as going beyond them.";
+		// Joined from the parts that exist: an absent image-only note must not
+		// leave a blank line behind it.
+		return [
+			`Nothing in the indexed slides of "${course}" matches: ${asked}.${missing}`,
+			imageOnlyNote(decks),
+			"Say the slides do not cover it, then teach it yourself and mark it as going beyond them.",
+		].filter(Boolean).join("\n\n");
 	}
 	const lines = [
 		`"${course}" — ${result.hits.length} slide excerpt${result.hits.length === 1 ? "" : "s"} for: ${asked}`,
