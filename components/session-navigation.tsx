@@ -14,8 +14,11 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 	const main = context?.scrollRef.current;
 	if (main?.contains(node)) context!.stopScroll();
 	// A contained older row reports its size estimate until laid out; lay it out for the read.
-	const row = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-older-transcript-row]");
-	row?.setAttribute("data-lh-measuring", "");
+	const rows: HTMLElement[] = [];
+	for (let element = node instanceof Element ? node : node.parentElement; element && scope.contains(element); element = element.parentElement) {
+		if (element.hasAttribute("data-older-transcript-row")) rows.push(element as HTMLElement);
+	}
+	for (const row of rows) row.setAttribute("data-lh-measuring", "");
 	try {
 		for (let element = node.parentElement; element && scope.contains(element); element = element.parentElement) {
 			const view = element.ownerDocument.defaultView;
@@ -26,7 +29,7 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 			element.scrollTo({ top: element.scrollTop + rect.top - container.top - 16, behavior: "instant" });
 		}
 	} finally {
-		row?.removeAttribute("data-lh-measuring");
+		for (const row of rows) row.removeAttribute("data-lh-measuring");
 	}
 }
 

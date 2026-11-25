@@ -78,4 +78,21 @@ describe("reading position on a jump into a contained passage", () => {
 		assert.ok(target.classList.contains("lh-source-highlight"));
 		assert.equal(scrolled(), REAL_TOP - 16);
 	});
+
+	it("lands on the real box when the target's row is nested in an outer contained row", () => {
+		const { scroller, target, document, scrolled } = harness();
+		const outer = document.createElement("div");
+		outer.setAttribute("data-older-transcript-row", "");
+		scroller.append(outer);
+		outer.append(target);
+		Object.defineProperty(target, "getBoundingClientRect", {
+			configurable: true,
+			value: () => ({
+				top: target.hasAttribute("data-lh-measuring") && outer.hasAttribute("data-lh-measuring") ? REAL_TOP : ESTIMATE_TOP,
+			}),
+		});
+		scrollSessionTarget(target as unknown as HTMLElement, scroller as unknown as HTMLElement, null);
+		assert.equal(scrolled(), REAL_TOP - 16);
+		assert.ok(!outer.hasAttribute("data-lh-measuring") && !target.hasAttribute("data-lh-measuring"));
+	});
 });
