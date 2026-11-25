@@ -148,6 +148,20 @@ test("course-material example grounds every teaching agent in a configured cours
 	assert.deepEqual(await host.call("course-material", "remove", { name: "Basi di dati" }), []);
 	for (const agent of kinds) assert.deepEqual(host.agentContributions({ chatId: chat.id, agent }, []), { instructions: [], tools: [] });
 
+	// A session's stored course never falls back to a similarly named neighbour.
+	await host.call("course-material", "add", { name: "Math", folder: slides });
+	await host.call("course-material", "add", { name: "Math 2", folder: slides });
+	await host.call("course-material", "select", { chatId: chat.id, course: "Math", decks: [] });
+	await host.call("course-material", "remove", { name: "Math" });
+	const stale = host.agentContributions({ chatId: chat.id, agent: "teacher" }, []).tools[0]!;
+	const staleText = ((await stale.execute!("call-4", {} as never, undefined, undefined)) as { content: { text: string }[] }).content[0]!.text;
+	assert.match(staleText, /"Math", which is no longer configured/);
+	assert.match(staleText, /"Math 2"/);
+	assert.doesNotMatch(staleText, /lecture-01\.pdf/, "the neighbouring course's decks are not listed");
+	await assert.rejects(host.call("course-material", "decks", { course: "Math" }), /not configured/);
+	await assert.rejects(host.call("course-material", "select", { chatId: chat.id, course: "Math", decks: [] }), /not configured/);
+	await host.call("course-material", "remove", { name: "Math 2" });
+
 	await host.setEnabled("course-material", false);
 	assert.deepEqual(host.agentContributions({ chatId: chat.id, agent: "teacher" }, []), { instructions: [], tools: [] });
 });

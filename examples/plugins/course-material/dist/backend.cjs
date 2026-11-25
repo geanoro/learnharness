@@ -102,10 +102,15 @@ exports.activate = ctx => {
 	 *  case-insensitive hit first, then a single unambiguous containment match. */
 	const courseNames = () => quoted(courses);
 
+	const findExact = name => {
+		const wanted = String(name ?? "").trim().toLowerCase();
+		return wanted ? courses.find(course => course.name.trim().toLowerCase() === wanted) : undefined;
+	};
+
 	const resolve = requested => {
 		const wanted = String(requested ?? "").trim().toLowerCase();
 		if (!wanted) return undefined;
-		const exact = courses.find(course => course.name.trim().toLowerCase() === wanted);
+		const exact = findExact(wanted);
 		if (exact) return exact;
 		const partial = courses.filter(course => course.name.toLowerCase().includes(wanted) || wanted.includes(course.name.toLowerCase()));
 		return partial.length === 1 ? partial[0] : undefined;
@@ -151,7 +156,7 @@ exports.activate = ctx => {
 		if (ctx.signal.aborted || signal?.aborted) throw new Error("Course material is disabled or the turn was cancelled");
 		const selection = sessions[chatId];
 		if (selection) {
-			const course = resolve(selection.course);
+			const course = findExact(selection.course);
 			if (!course) {
 				return `This session was pointed at the course "${selection.course}", which is no longer configured. `
 					+ `Say so and ask the learner to pick again with ${PICKER}. The configured courses are: ${quoted(courses)}.`;
@@ -257,7 +262,7 @@ exports.activate = ctx => {
 
 	/** The session picker's own operations. */
 	ctx.handle("decks", input => {
-		const course = resolve(object(input).course);
+		const course = findExact(object(input).course);
 		if (!course) throw new Error("That course is not configured");
 		const listing = listDecks(course.folder);
 		return { course: course.name, root: listing.root, truncated: listing.truncated, decks: listing.decks.map(deck => ({ label: deck.label })) };
@@ -270,7 +275,7 @@ exports.activate = ctx => {
 	ctx.handle("select", input => {
 		const value = object(input);
 		if (typeof value.chatId !== "string" || !value.chatId) throw new Error("A session id is required");
-		const course = resolve(value.course);
+		const course = findExact(value.course);
 		if (!course) throw new Error("That course is not configured");
 		const available = new Set(listDecks(course.folder).decks.map(deck => deck.label));
 		const decks = Array.isArray(value.decks) ? value.decks.filter(deck => available.has(deck)) : [];
