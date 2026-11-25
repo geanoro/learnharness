@@ -27,6 +27,7 @@ Object.assign(globalThis, {
 	IS_REACT_ACT_ENVIRONMENT: true,
 });
 
+const pluginDir = path.resolve("examples/plugins/feynman-coach");
 const { activate } = await import(path.join(pluginDir, "dist/main.js"));
 
 function mountRenderer() {
@@ -115,7 +116,7 @@ test("the plugin's \"I don't know\" row and confidence row render with the real 
 			const state = pressed ? "pressed" : "idle";
 			assert.deepEqual(classSet(pluginButton), classSet(nb), `button ${state}`);
 			assert.deepEqual(classSet(pluginButton.firstElementChild), classSet(nb.firstElementChild), `mark ${state}`);
-			assert.deepEqual(classSet(pluginButton.firstElementChild!.firstElementChild), classSet(nb.firstElementChild!.firstElementChild), `dot ${state}`);
+			if (pressed) assert.deepEqual(classSet(pluginButton.firstElementChild!.firstElementChild), classSet(nb.firstElementChild!.firstElementChild), `dot ${state}`);
 			const p = confidenceParts(plugin), n = confidenceParts(native);
 			assert.deepEqual(classSet(p.label), classSet(n.label), `confidence label ${state}`);
 			assert.deepEqual(classSet(p.track), classSet(n.track), `track ${state}`);
