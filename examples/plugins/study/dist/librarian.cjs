@@ -273,9 +273,23 @@ function imageOnlyNote(decks) {
 		const detail = [numbered, trailing].filter(Boolean).join(" and ");
 		if (detail) parts.push(`${deck.label}: ${detail}`);
 	}
-	if (!parts.length) return "";
-	return `Image-only slides carry no text and are NOT in this index — ${parts.join("; ")}. `
-		+ "For those, send ONE native `pdf` job for that deck; do not report them as missing from the course.";
+	const cut = [];
+	for (const deck of decks ?? []) {
+		const pieces = [];
+		if (deck.droppedPages) pieces.push(`${deck.droppedPages} page${deck.droppedPages === 1 ? "" : "s"} after the first ${(deck.pages ?? []).length} not indexed`);
+		if (deck.clippedPages) pieces.push(`${deck.clippedPages} long page${deck.clippedPages === 1 ? "" : "s"} cut short`);
+		if (pieces.length) cut.push(`${deck.label}: ${pieces.join(", ")}`);
+	}
+	const sentences = [];
+	if (parts.length) {
+		sentences.push(`Image-only slides carry no text and are NOT in this index — ${parts.join("; ")}. `
+			+ "For those, send ONE native `pdf` job for that deck; do not report them as missing from the course.");
+	}
+	if (cut.length) {
+		sentences.push(`Index limits left slide text out — ${cut.join("; ")}. `
+			+ "For those, send ONE native `pdf` job for that deck; do not report them as missing from the course.");
+	}
+	return sentences.join(" ");
 }
 
 /** `course_library`'s answer: the slides' own words, with deck and page. */
@@ -293,7 +307,7 @@ function renderSearch({ course, decks, terms, limits, unindexed }) {
 		return [
 			`Nothing in the indexed slides of "${course}" matches: ${asked}.${missing}`,
 			imageOnlyNote(decks),
-			"Say the slides do not cover it, then teach it yourself and mark it as going beyond them.",
+			"Unless a note above says slide text is missing from the index, say the slides do not cover it, then teach it yourself and mark it as going beyond them.",
 		].filter(Boolean).join("\n\n");
 	}
 	const lines = [

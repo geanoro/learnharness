@@ -141,11 +141,11 @@ be counted, not numbered, and are reported as "N more image pages".
 
 **Staleness.** Each deck's cache records the size and mtime it was built from. A
 deck whose file has changed reads as *not indexed* rather than answering from
-stale text. Removing a course deletes its cached page text.
+stale text. Removing a course deletes its cached page text, except for decks another course still lists.
 
 **Bounds.** The walk is PDFs only, hidden folders skipped, 4 levels and 200 files
 at most. The cache keeps at most 400 pages per deck and 4,000 characters per
-page. One reply is at most 6 excerpts, 600 characters each and 3,600 overall.
+page; what that cuts is recorded and reported as missing from the index, never as absent from the course. One reply is at most 6 excerpts, 600 characters each and 3,600 overall.
 The host's own conversion limits apply on the way in: 25 MiB per file, 1,000
 pages, and **one conversion at a time across all plugins**, which is why indexing
 is sequential and retries a busy slot once.

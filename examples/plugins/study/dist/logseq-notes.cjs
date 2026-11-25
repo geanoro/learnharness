@@ -232,7 +232,7 @@ function renderCourse({ course, days, limits }) {
 	const counted = countEntries(days);
 	const heading = [
 		`The learner's own Logseq notes for "${course}" — ${counted.highlights} slide highlight(s), ${counted.notes} note(s) of which ${counted.doubts} sound unsure, across ${counted.days} journal day(s).`,
-		"These are the learner's notes, not the course material: keep teaching from the slides the librarian returns, and use these to see what they highlighted, wrote and doubted. Cite the journal day and the slide page when you refer to one.",
+		"These are the learner's notes, not the course material: keep teaching from the slides the librarian returns, and use these to see what they highlighted, wrote and doubted. Always cite the journal day, and the deck and slide page whenever the tool gave one.",
 	].join("\n");
 	return renderText({ heading, days, limits });
 }

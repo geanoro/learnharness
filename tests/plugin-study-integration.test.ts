@@ -209,10 +209,26 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		assert.match(await textOf(tool, { terms: ["elezioni"] }), /lecture-03\.pdf, p\. 3:/);
 	});
 
+	await t.test("an oversize deck never lets truncated slides be reported as absent", async () => {
+		const big = Array.from({ length: 405 }, (_, index) => `--- Page ${index + 1} ---\n\nfiller ${index + 1}${index === 0 ? ` ${"x".repeat(4500)}` : ""} ${index === 404 ? "zebrafish" : ""}`).join("\n\n");
+		const size = fs.statSync(path.join(slides, "lecture-03.pdf")).size;
+		const reply = await host.call("study", "putIndex", { course: "DISTSYS", label: "lecture-03.pdf", markdown: big, notices: [], size }) as { pages: number };
+		assert.equal(reply.pages, 400);
+		const tool = host.agentContributions({ chatId: chat.id, agent: "teacher" }, []).tools[0]!;
+		const missing = await textOf(tool, { terms: ["zebrafish"] });
+		assert.match(missing, /5 pages after the first 400 not indexed/);
+		assert.match(missing, /1 long page cut short/);
+		assert.match(await textOf(tool, {}), /beyond the index limits/);
+		await host.call("study", "putIndex", { course: "DISTSYS", label: "lecture-03.pdf", markdown: LECTURE_03, notices: [], size });
+		assert.doesNotMatch(await textOf(tool, { terms: ["zebrafish"] }), /Index limits/);
+	});
+
 	await t.test("the index refuses text that did not come from the course's own folder", async () => {
 		await assert.rejects(host.call("study", "putIndex", { course: "DISTSYS", label: "../secret.pdf", markdown: LECTURE_03 }),
 			/is not a deck in/);
 		await assert.rejects(host.call("study", "putIndex", { course: "DISTSYS", label: "lecture-03.pdf", markdown: LECTURE_03, size: 999999 }),
+			/does not match the file that was read/);
+		await assert.rejects(host.call("study", "putIndex", { course: "DISTSYS", label: "lecture-03.pdf", markdown: LECTURE_03 }),
 			/does not match the file that was read/);
 		await assert.rejects(host.call("study", "putIndex", { course: "DISTSYS", label: "lecture-03.pdf", markdown: "   " }),
 			/converted to no text at all/);
@@ -258,6 +274,10 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		assert.match(read.description, /Omit `course` to read "DISTSYS"/);
 		assert.deepEqual((read.parameters as { required?: unknown }).required, []);
 		assert.match(read.description, /Call logseq_read_course_notes ONCE/);
+		assert.match(read.description, /not every turn/);
+		// The composed tool description carries the firm rule: a page the tool gave is always cited with its deck.
+		assert.match(read.description, /Always cite the journal day, and whenever the tool gave a slide page, cite that deck and page too/);
+		assert.doesNotMatch(read.description, /upsertNodes/, "no write tool is named to an agent");
 
 		// The token is plugin-owned: no read-back operation returns it.
 		const state = await host.call("study", "state") as { logseq: { hasToken: boolean } };

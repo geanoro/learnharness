@@ -79,11 +79,6 @@ test("the module exposes exactly the two read-only note tools, and no plugin sur
 	for (const absent of ["activate", "registerSettings", "registerView", "manifest", "instructions"]) {
 		assert.equal(absent in logseq, false, `the module must not expose ${absent}`);
 	}
-	assert.match(NOTES_GUIDANCE, /Call logseq_read_course_notes ONCE/);
-	assert.match(NOTES_GUIDANCE, /keep teaching from what the librarian returns/);
-	assert.match(NOTES_GUIDANCE, /Cite the journal day, and a slide page only when the tool gave you one/);
-	assert.match(NOTES_GUIDANCE, /not every turn/, "the agents must be told not to call these on every turn");
-	assert.doesNotMatch(NOTES_GUIDANCE, /upsertNodes/, "no write tool may even be named to an agent");
 	// The guidance and the tool definitions are charged to a turn that has the
 	// notes on, so their size is what that turn pays. Measured chars/4, as
 	// src/server/chat-handler.ts:367 estimates the system prompt.

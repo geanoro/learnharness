@@ -247,6 +247,7 @@ exports.activate = ctx => {
 			lines.push(entry
 				? `- ${deck.label} — ${entry.pages.length} searchable page${entry.pages.length === 1 ? "" : "s"}`
 					+ `${entry.imageOnlyPages.length || entry.imageOnlyTrailing ? ", plus image-only pages" : ""}`
+					+ `${entry.droppedPages || entry.clippedPages ? ", some slide text beyond the index limits" : ""}`
 				: `- ${deck.label} — NOT indexed; only a \`pdf\` job can read it: ${deck.path}`);
 		}
 		if (scope.unindexed.length) {
@@ -411,7 +412,13 @@ exports.activate = ctx => {
 		if (course) {
 			// The course's cached index goes with it: nothing keeps page text for a
 			// course the learner removed.
-			try { for (const deck of listDecks(course.folder).decks) dropIndex(deck.path); } catch { /* folder already gone */ }
+			// Decks another course still lists keep their cache.
+			const kept = new Set();
+			for (const other of courses) {
+				if (other === course) continue;
+				try { for (const deck of listDecks(other.folder).decks) kept.add(deck.path); } catch { /* folder gone */ }
+			}
+			try { for (const deck of listDecks(course.folder).decks) if (!kept.has(deck.path)) dropIndex(deck.path); } catch { /* folder already gone */ }
 			persistCourses(courses.filter(entry => entry !== course));
 			compose();
 		}
@@ -476,20 +483,24 @@ exports.activate = ctx => {
 		const markdown = typeof value.markdown === "string" ? value.markdown : "";
 		if (!markdown.trim()) throw new Error(`"${label}" converted to no text at all; it may be a scan. Teach it through a pdf job instead.`);
 		const stat = fs.statSync(deck.path);
-		if (typeof value.size === "number" && value.size !== stat.size) {
+		if (value.size !== stat.size) {
 			throw new Error(`"${label}" on disk does not match the file that was read. Choose the course's own folder and index again.`);
 		}
 		const built = librarian.buildDeckIndex({
 			label: deck.label, path: deck.path, size: stat.size, mtimeMs: Math.floor(stat.mtimeMs),
 			markdown, notices: Array.isArray(value.notices) ? value.notices : [],
 		});
+		// Bounded on the way in, so the cache cannot grow without end and one
+		// librarian call never reads more than a known amount. What the bounds
+		// cut is recorded, so the teacher never reports it as absent.
+		const kept = built.pages.slice(0, MAX_INDEX_PAGES);
 		writeIndex({
 			...built,
-			// Bounded on the way in, so the cache cannot grow without end and one
-			// librarian call never reads more than a known amount.
-			pages: built.pages.slice(0, MAX_INDEX_PAGES).map(page => ({ number: page.number, text: page.text.slice(0, MAX_PAGE_CHARS) })),
+			pages: kept.map(page => ({ number: page.number, text: page.text.slice(0, MAX_PAGE_CHARS) })),
+			droppedPages: built.pages.length - kept.length,
+			clippedPages: kept.filter(page => page.text.length > MAX_PAGE_CHARS).length,
 		});
-		return { label: deck.label, pages: Math.min(built.pages.length, MAX_INDEX_PAGES), imageOnly: built.imageOnlyPages.length + built.imageOnlyTrailing };
+		return { label: deck.label, pages: kept.length, imageOnly: built.imageOnlyPages.length + built.imageOnlyTrailing };
 	});
 
 	ctx.handle("dropIndex", input => {

@@ -49,7 +49,7 @@ const PAGE_INDEX_TTL_MS = 60000;
 const NOTES_GUIDANCE = [
 	"Call logseq_read_course_notes ONCE when you take up the course, and logseq_search_notes only when the learner mentions something they wrote down — not every turn.",
 	"Their notes record what they highlighted, put in their own words, and said they were unsure about; lead with a doubt they wrote when it is relevant. They do not replace the slides: keep teaching from what the librarian returns.",
-	"Cite the journal day, and a slide page only when the tool gave you one. If a tool reports Logseq closed or the token wrong, say so once and carry on without the notes.",
+	"Always cite the journal day, and whenever the tool gave a slide page, cite that deck and page too. If a tool reports Logseq closed or the token wrong, say so once and carry on without the notes.",
 ].join("\n");
 
 /**
