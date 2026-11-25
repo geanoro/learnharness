@@ -36,7 +36,7 @@ import {
   type StreamdownProps,
 } from "streamdown";
 import { mdComponents } from "@/components/md-blocks";
-import { CachedBlock, MdBlockLiveContext } from "@/components/md-block-cache";
+import { CachedBlock, MD_BLOCK_PROFILE_OPT_OUT, MdBlockLiveContext, MdBlockProfileContext } from "@/components/md-block-cache";
 import { repairMathForDisplay, transformMathDelimiters } from "@/src/core";
 import { rehypeGluePunctuation } from "@/components/md-nobreak";
 
@@ -390,8 +390,21 @@ export const streamdownRehypePlugins = [
   rehypeGluePunctuation,
 ] as NonNullable<StreamdownProps["rehypePlugins"]>;
 
+// Props that cannot change the markup a block renders. Anything else a
+// caller passes may: a `components` override renders different elements for
+// the same markdown, and `plugins`/`rehypePlugins`/`allowedTags` change what
+// the pipeline produces. Such a surface gets its own block-cache namespace
+// opts out of the block cache (components/md-block-cache.tsx) instead of
+// sharing the transcript's output — and an unknown prop lands on that side of
+// the line by default, which is the safe one. `isAnimating` is listed because
+// the markup it changes (an unfinished fence or diagram) is never cached.
+const MARKUP_NEUTRAL_PROPS = new Set(["className", "children", "live", "isAnimating", "id", "style"]);
+
 export const MessageResponse = memo(
   ({ className, children, live = false, ...props }: MessageResponseProps) => {
+    // One shared profile for the ordinary transcript surfaces; anything that
+    // renders markdown its own way takes no part in the cache.
+    const profile = Object.keys(props).every((key) => MARKUP_NEUTRAL_PROPS.has(key)) ? "" : MD_BLOCK_PROFILE_OPT_OUT;
     // Legacy backslash delimiters are converted in a single linear scan;
     // native dollar math passes through to Streamdown unchanged. Incomplete
     // legacy spans are left for a later render when their closer arrives.
@@ -401,6 +414,7 @@ export const MessageResponse = memo(
         : children;
 
     return (
+      <MdBlockProfileContext.Provider value={profile}>
       <MdBlockLiveContext.Provider value={live}>
       <Streamdown
         className={cn(
@@ -424,6 +438,7 @@ export const MessageResponse = memo(
         {content}
       </Streamdown>
       </MdBlockLiveContext.Provider>
+      </MdBlockProfileContext.Provider>
     );
   },
   (prevProps, nextProps) =>

@@ -45,10 +45,14 @@ type Visit = { html: string; queued: number };
 
 /** One visit to a lesson: mount, see what it queued, capture, unmount. */
 async function visit(markdown: string, live = false): Promise<Visit> {
+	return render(markdown, <MessageResponse live={live}>{markdown}</MessageResponse>);
+}
+
+async function render(markdown: string, element: React.ReactElement): Promise<Visit> {
 	const host = document.createElement("div");
 	document.body.append(host);
 	const root = createRoot(host);
-	await act(async () => root.render(<MessageResponse live={live}>{markdown}</MessageResponse>));
+	await act(async () => root.render(element));
 	const result = { html: host.innerHTML, queued: mdBlockCacheStats().pending };
 	flushMdBlockCaptures();
 	await act(async () => root.unmount());
@@ -75,6 +79,18 @@ describe("markdown block cache", () => {
 		const second = await visit(md);
 		assert.equal(second.queued, 0, "the repeat visit queued nothing: it was a cache hit");
 		assert.equal(second.html, first.html, "and renders byte-identical markup");
+	});
+
+	it("does not serve the transcript's output to a surface with its own markdown profile", async () => {
+		const md = "Prose two different surfaces both render.";
+		await visit(md);
+		assert.equal(mdBlockCacheStats().entries, 1);
+
+		// A `components` override renders its own markup for the same source.
+		const own = await render(md, <MessageResponse components={{}}>{md}</MessageResponse>);
+		assert.equal(own.queued, 0, "it takes no part in the cache at all");
+		assert.equal(mdBlockCacheStats().entries, 1, "and stores nothing of its own");
+		assert.match(own.html, /two different surfaces/, "while still rendering");
 	});
 
 	it("does not reuse output rendered under other settings", async () => {

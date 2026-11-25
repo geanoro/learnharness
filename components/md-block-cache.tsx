@@ -50,6 +50,18 @@ import { Block, type BlockProps } from "streamdown";
  *  block whose content changes before its capture runs is dropped. */
 export const MdBlockLiveContext = createContext(false);
 
+/** The markdown profile this surface renders with — the other half of "same
+ *  input, same output". Streamdown rebuilds its resolved component and plugin
+ *  objects per mount, so their identity says nothing across mounts; the
+ *  surface declares instead. The shared transcript profile is the empty
+ *  string; a surface that renders markdown its own way (a `components` or
+ *  plugin override) declares MD_BLOCK_PROFILE_OPT_OUT and takes no part in
+ *  the cache, rather than risk being served the transcript's markup.
+ *  components/ai-elements/message.tsx decides which. */
+export const MdBlockProfileContext = createContext("");
+
+export const MD_BLOCK_PROFILE_OPT_OUT = "opt-out";
+
 /** Total cached HTML, in UTF-16 code units (~2 bytes each). The learner's
  *  largest session renders ~1.2 M characters of cacheable HTML, so this
  *  holds a handful of sessions and evicts the least recently used block
@@ -116,6 +128,8 @@ export function setMdRenderSignature(next: string): void {
 export function mdRenderSignature(): string {
 	return signature;
 }
+
+
 
 // ─── The store: insertion-ordered Map as an LRU, capped by characters ────────
 
@@ -253,20 +267,22 @@ export function CachedBlock(props: BlockProps): React.JSX.Element {
 	// requests; it renders the live block, which is also what the client
 	// hydrates into.
 	const client = typeof document !== "undefined";
-	const key = `${signature}\u0000${content}`;
+	const live = useContext(MdBlockLiveContext);
+	const profile = useContext(MdBlockProfileContext);
+	const shared = client && profile !== MD_BLOCK_PROFILE_OPT_OUT;
+	const key = `${signature}\u0000${profile}\u0000${content}`;
 	// The decision is taken once per key, at mount: a block that is already
 	// drawn live must not be swapped for an HTML copy mid-life.
-	const [shown, setShown] = useState<Shown>(() => ({ key, html: client ? take(key) : undefined }));
+	const [shown, setShown] = useState<Shown>(() => ({ key, html: shared ? take(key) : undefined }));
 	let current = shown;
 	if (shown.key !== key) {
-		current = { key, html: client ? take(key) : undefined };
+		current = { key, html: shared ? take(key) : undefined };
 		setShown(current);
 	}
 	const host = useRef<HTMLDivElement>(null);
 	const ownerRef = useRef<object>({});
-	const live = useContext(MdBlockLiveContext);
 	const cached = current.html !== undefined;
-	const capturable = client && !cached && !blank && !live && !props.isIncomplete;
+	const capturable = shared && !cached && !blank && !live && !props.isIncomplete;
 
 	useEffect(() => {
 		// Whatever this block now renders, anything queued for what it
