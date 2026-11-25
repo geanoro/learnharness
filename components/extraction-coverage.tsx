@@ -16,7 +16,8 @@ import { resolveSettings } from "@/src/core";
  * block in the sidebar's session context menu — the two replacements for
  * the graph view's coverage panel (components/graph-coverage.tsx, retired
  * with this wave). Coverage is the SAME derivation, scoped to one session:
- * GET /api/chats/[id] now carries `coverage` (Platform's eed4b4e).
+ * GET /api/chats/[id] carries `coverage` (Platform's eed4b4e), and
+ * ?view=coverage serves that block without the transcript.
  *
  * The ring fills with uncoveredTokens / extractionChunkTokens — the chunk
  * budget the threshold setting (Graph ▸ extractionChunkTokens) pins: the
@@ -46,7 +47,11 @@ export interface SessionCoverage {
  *  nothing rather than a fake zero; the honest-render doctrine). */
 async function fetchCoverage(chatId: string): Promise<SessionCoverage | null> {
 	try {
-		const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`);
+		// ?view=coverage, never the whole record: this reads the coverage
+		// block alone, and the full projection would ship the session's
+		// entire transcript with it — on every session switch, and again
+		// every 2s while a run is in flight.
+		const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}?view=coverage`);
 		if (!res.ok) return null;
 		const body = (await res.json()) as { coverage?: SessionCoverage | null };
 		return body.coverage ?? null;

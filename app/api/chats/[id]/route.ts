@@ -3,10 +3,36 @@ import { pendingPluginQuestionOf, activeProblemOf } from "@/src/core";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
 	const { id } = await params;
-	if (new URL(req.url).searchParams.get("view") === "stats") {
+	// THE NARROW READS. A session switch is a client-side navigation: the
+	// RSC payload already carried the transcript. A surface that needs one
+	// FIELD of the record says so here, because the full projection below
+	// costs one whole transcript per reader — 468 KB each on a 237-message
+	// session, and the model control and the coverage ring were both paying
+	// it on every switch. None of these adopt history or need plugin
+	// availability, so they skip the reconciliation too.
+	const view = new URL(req.url).searchParams.get("view");
+	if (view === "stats") {
 		// Stats refreshes don't adopt history or need plugin availability.
 		const chat = getChat(id);
 		return chat ? Response.json({ turns: chat.turns, pricing: sessionCost(chat) })
+			: Response.json({ error: "Not found" }, { status: 404 });
+	}
+	if (view === "settings") {
+		// The in-session model control (components/model-picker.tsx) reads
+		// the session's own slot pin — the same field the PUT on
+		// ./settings writes. An unstamped legacy session has none, and the
+		// absent key is the answer (the picker falls back to the strong
+		// slot exactly as it does off the full read).
+		const chat = getChat(id);
+		return chat ? Response.json({ settings: chat.settings })
+			: Response.json({ error: "Not found" }, { status: 404 });
+	}
+	if (view === "coverage") {
+		// The ring meter and the sidebar's coverage block
+		// (components/extraction-coverage.tsx). sessionCoverage derives from
+		// the id, so the record read here only answers "does this session
+		// exist" — the same 404 contract the full read gives.
+		return getChat(id) ? Response.json({ coverage: sessionCoverage(id) })
 			: Response.json({ error: "Not found" }, { status: 404 });
 	}
 	await reconcilePluginQuestionCompatibility(stores.chatStore, id);

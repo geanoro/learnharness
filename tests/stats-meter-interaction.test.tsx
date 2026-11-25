@@ -23,7 +23,10 @@ test("meter keeps its measured numerator across selected-model/catalog changes, 
 	globalThis.fetch = async (input) => {
 		if (input === "/api/models") return Response.json(catalog);
 		if (input === "/api/settings") return Response.json({ settings: { models: {} } });
-		if (input === "/api/chats/fixture") return Response.json({ settings: { model: { provider: "fixture", id: selected }, thinkingLevel: "off" } });
+		// The model control reads ?view=settings — never the whole record,
+		// which would ship this session's transcript on every mount.
+		if (input === "/api/chats/fixture?view=settings") return Response.json({ settings: { model: { provider: "fixture", id: selected }, thinkingLevel: "off" } });
+		if (input === "/api/chats/fixture") throw new Error("the model control must not read the full session record");
 		throw new Error(`unexpected fixture request ${String(input)}`);
 	};
 	const host = document.createElement("div"); document.body.append(host);

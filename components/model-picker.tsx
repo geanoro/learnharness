@@ -27,7 +27,8 @@ export function catalogLimits(catalog: Pick<ModelCatalogResponse, "models">): Ma
 /**
  * THE CONVERSATION MODEL CONTROL — dual-bound (owner, per-session models,
  * 2026-09-28). WITH a chatId (the in-session stats bar): the pills bind
- * THE SESSION'S OWN record — reads GET /api/chats/:id (its settings field;
+ * THE SESSION'S OWN record — reads GET /api/chats/:id?view=settings (that
+ * field alone, never the transcript with it;
  * a legacy unstamped record falls back to the strong slot's display,
  * exactly what the engine resolves), writes PUT /api/chats/:id/settings
  * (validated + level-clamped server-side). The session owns its model +
@@ -60,7 +61,11 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// reads the models section alone.
 	const readRecord = useCallback(() => {
 		if (chatId) {
-			fetch(`/api/chats/${chatId}`)
+			// ?view=settings, never the whole record: the pills read the
+			// settings field alone, and the full projection would ship this
+			// session's entire transcript on every mount (468 KB on the
+			// owner's longest session, on every session switch).
+			fetch(`/api/chats/${chatId}?view=settings`)
 				.then((r) => { if (!r.ok) throw new Error(`session read failed: ${r.status}`); return r.json() as Promise<{ settings?: ChatSettings }>; })
 				.then((body) => setSession({ settings: body.settings }))
 				.catch(() => {
