@@ -1942,7 +1942,9 @@ export function Chat({
 																data-older-transcript-row={mi < olderPartsBefore ? "passage" : undefined}
 																className="lh-source-passage"
 															>
-																<MessageResponse>{part.text}</MessageResponse>
+																{/* `live`: the part being written must not be
+																    remembered by the block cache half-finished. */}
+																<MessageResponse live={status === "streaming" && isLastPart}>{part.text}</MessageResponse>
 															</div>
 														);
 													}

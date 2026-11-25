@@ -42,6 +42,7 @@ import {
 	type Theme,
 	type ThemeColors,
 } from "@/src/core";
+import { setMdRenderSignature } from "@/components/md-block-cache";
 
 /** The resolved, fully-concrete appearance view (delta + factory merged). */
 export function resolveAppearance(delta: AppearanceSettings | undefined) {
@@ -193,6 +194,13 @@ export function AppearanceProvider({
 	// when the server-rendered palette changes, even within the same mode.
 	const serverKey = JSON.stringify(themeVars(effectiveColors(initialTheme, initialAppearance), initialTheme.mode));
 	const key = useMemo(() => JSON.stringify([vars, serverKey]), [vars, serverKey]);
+	// The markdown block cache keys its remembered output on the appearance
+	// that produced it, so a settings change can never serve markup rendered
+	// under the previous settings. Written DURING RENDER, not from an effect:
+	// the blocks that read it render below this provider in the same commit,
+	// and a signature arriving one commit late would strand everything the
+	// first visit captured under a key no later visit looks up.
+	if (typeof document !== "undefined") setMdRenderSignature(key);
 	// REMOVAL is half the job (owner repro, fix wave): a later write that
 	// OMITS a var (empty font = factory, serif toggle back on) must clear
 	// the previously-set inline value or the stale one wins forever. Every

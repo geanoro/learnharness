@@ -336,7 +336,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId, olderRow 
 							<span className="font-medium text-muted-foreground">Why: </span>
 							{/* Keep the first paragraph beside the label, not every paragraph:
 							   later paragraphs must retain their recovered document structure. */}
-							<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.explanation}</ToolContentResponse>
+							<ToolContentResponse className="inline lh-md-inline">{answer.explanation}</ToolContentResponse>
 						</div>
 					)}
 				</div>
@@ -348,7 +348,7 @@ export function AnsweredCard({ answer: savedAnswer, input, toolCallId, olderRow 
 			{isExplain && answer.committed && (
 				<div className="mt-3 rounded-lg bg-muted py-2 text-sm text-muted-foreground">
 					<span className="font-medium text-foreground">The answer: </span>
-					<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.committed}</ToolContentResponse>
+					<ToolContentResponse className="inline lh-md-inline">{answer.committed}</ToolContentResponse>
 				</div>
 			)}
 		</div>

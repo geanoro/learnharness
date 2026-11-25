@@ -232,6 +232,65 @@ body {
 	font-weight: var(--lh-heading-weight, 900);
 }
 
+/* MARKDOWN BLOCK WRAPPERS (cross-mount block cache, 2026-11-25):
+   components/md-block-cache.tsx wraps every streamdown block in
+   `<div data-md-block>` so a rendered block can be read back out of the DOM
+   and handed to the next visit as HTML. The wrapper must cost nothing:
+   `display: contents` leaves no box, so the markdown elements stay direct
+   participants of the prose flow and margins collapse exactly as before.
+
+   What they DO displace is streamdown's root `space-y-4` and the message
+   renderer's own first/last-child reset, which address the root's DIRECT
+   children — now the wrappers. The rules below put both back on the real
+   elements.
+
+   The spacing rule must be reproduced exactly, not approximated. Tailwind v4
+   compiles `space-y-4` to `:where(.space-y-4 > :not(:last-child))` — a ZERO
+   specificity rule setting margin-block-end: 1rem, which every element's own
+   margin utility overrides. So a heading keeps its mt-6 above and its mb-2
+   below (24px then 8px), and only elements with no margin of their own fall
+   back to the 1rem gap. A high-specificity `margin-top: 1rem` between every
+   pair looks the same in total height but flattens that: measured against
+   the built page, it moved every heading 8px away from the text it belongs
+   to. Hence :where() here too, and margin-block-end rather than -start:
+   same rule, re-aimed through the wrapper, inside a block and across the
+   boundary to the next one.
+
+   The replacements live in @layer utilities, where the rules they stand in
+   for live. Unlayered CSS beats every layered rule whatever its specificity
+   (the rest of this file relies on exactly that), so an unlayered :where()
+   is not zero-weight at all — it silently won over `mt-6` and cost each
+   heading the same 8px. Inside the layer the ordinary cascade applies
+   again. */
+[data-md-block] {
+	display: contents;
+}
+
+@layer utilities {
+	:where(.lh-prose > [data-md-block] > :not(:last-child)),
+	:where(.lh-prose > [data-md-block]:not(:last-child) > :last-child) {
+		margin-block-start: 0;
+		margin-block-end: 1rem;
+	}
+
+	.lh-prose > [data-md-block]:first-child > :first-child {
+		margin-top: 0;
+	}
+
+	.lh-prose > [data-md-block]:last-child > :last-child {
+		margin-bottom: 0;
+	}
+}
+
+/* Markdown that joins a sentence instead of opening a block (the answered
+   card's "his answer / the committed answer" lines). The block wrapper now
+   sits between the prose root and that first paragraph, so the rule reaches
+   through it. */
+.lh-md-inline > [data-md-block]:first-child > p:first-child {
+	display: inline;
+	margin: 0;
+}
+
 /* lh-input (owner, typography round 2): lh-prose's 1.5 READING leading
    makes typing carets tower over the glyphs — the caret fills the line
    box (24px at 16px text, ~2× the glyph height). Inputs are not
