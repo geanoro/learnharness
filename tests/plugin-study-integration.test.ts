@@ -118,6 +118,15 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 			{ courses: { name: string; logseq: string; decks: number; indexed: number }[] };
 		assert.deepEqual(state.courses.map(course => [course.name, course.logseq, course.decks, course.indexed]), [["DISTSYS", "DISTSYS", 2, 0]]);
 		await assert.rejects(host.call("study", "addCourse", { name: "distsys", folder: slides }), /already configured/);
+		// The learner may type the Logseq page either way; it is stored bare, so it
+		// is a usable search term and the UI can add the brackets back once.
+		const wrapped = await host.call("study", "addCourse", { name: "Wrapped", folder: slides, logseq: "[[FOR]]" }) as
+			{ courses: { name: string; logseq: string }[] };
+		assert.equal(wrapped.courses.find(course => course.name === "Wrapped")?.logseq, "FOR");
+		const edited = await host.call("study", "updateCourse", { name: "Wrapped", logseq: "[[Altro]]" }) as
+			{ courses: { name: string; logseq: string }[] };
+		assert.equal(edited.courses.find(course => course.name === "Wrapped")?.logseq, "Altro");
+		await host.call("study", "removeCourse", { name: "Wrapped" });
 		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, "study", "data", "courses.json"), "utf8")),
 			{ version: 1, courses: [{ name: "DISTSYS", folder: slides, logseq: "DISTSYS" }] });
 	});
@@ -139,9 +148,13 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		assert.match(planning.description, /Several terms in one call/);
 		assert.match(planning.description, /going past them/);
 		assert.match(planning.description, /ONE native `pdf` job/);
+		// The captain's rule: the excerpts ground the teacher, they are not the lesson.
+		assert.match(planning.description, /your source, not your script/);
+		assert.match(planning.description, /never paste or recite a slide/);
 		// A practice session is never in the planning phase: it gets the pointer.
 		const practice = host.agentContributions({ chatId: chat.id, agent: "practice" }, []).tools[0]!;
 		assert.doesNotMatch(practice.description, /ONLY through this tool/);
+		assert.match(practice.description, /never to recite/, "even the one-line pointer says what the excerpts are for");
 		assert.ok(practice.description.length < 200, `pointer is ${practice.description.length} chars`);
 	});
 
@@ -171,7 +184,11 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		// Verbatim slide text, with the page it came from — not a summary.
 		assert.match(answer, /lecture-03\.pdf, p\. 3:/);
 		assert.match(answer, /timeout randomizzati/);
-		assert.match(answer, /Verbatim slide text, not a summary/);
+		// Every reply that carries excerpts carries the rule for using them, in
+		// every phase — this is what the teacher reads next to the slide text.
+		assert.match(answer, /your SOURCE, not your script/);
+		assert.match(answer, /Explain it in your own teaching words at the learner's level/);
+		assert.match(answer, /never paste or recite a slide/);
 		// Recall across Italian inflection and accents: "elezione" finds "elezioni",
 		// and the query carried no accent while the slide does.
 		assert.match(answer, /Un leader è eletto per un termine/);
@@ -193,7 +210,9 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		await host.call("study", "putIndex", { course: "DISTSYS", label: "extra/lecture-04.pdf", markdown: flood, notices: [], size: fs.statSync(path.join(slides, "extra", "lecture-04.pdf")).size });
 		const tool = host.agentContributions({ chatId: chat.id, agent: "teacher" }, []).tools[0]!;
 		const flooded = await textOf(tool, { terms: ["consenso"] });
-		assert.ok(tokensOf(flooded) < 800, `a pathological course returned ${tokensOf(flooded)} tokens`);
+		// Bounds the EXCERPTS; the fixed footer that tells the teacher how to use
+		// them is overhead the cap deliberately does not police.
+		assert.ok(tokensOf(flooded) < 900, `a pathological course returned ${tokensOf(flooded)} tokens`);
 		assert.equal((flooded.match(/lecture-04\.pdf, p\. /g) ?? []).length, 6, "capped at six excerpts");
 	});
 
@@ -254,7 +273,7 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		chatStore.saveMessages(teaching.id, [...PROBE_DONE, TAGGED_QUIZ] as never);
 		const pointer = describe();
 		assert.doesNotMatch(pointer, /ONLY through this tool/, "teach");
-		assert.match(pointer, /cite only the pages it gives you/);
+		assert.match(pointer, /Cite only the pages it gives you/);
 	});
 
 	await t.test("notes are off until the session asks for them, and need a token", async () => {
@@ -272,6 +291,7 @@ test("study plugin: one course list, a librarian door, notes, and the explain-ba
 		// The model is told the Logseq name instead of being left to guess a block
 		// it has never seen, and may omit the argument entirely.
 		assert.match(read.description, /Omit `course` to read "DISTSYS"/);
+		assert.doesNotMatch(read.description, /\[\[/, "the agent is given the page name, not Logseq's bracket syntax");
 		assert.deepEqual((read.parameters as { required?: unknown }).required, []);
 		assert.match(read.description, /Call logseq_read_course_notes ONCE/);
 		assert.match(read.description, /not every turn/);

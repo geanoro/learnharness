@@ -30,21 +30,20 @@ or place it in `dist/data/`.
 
 ### Migrating from the two examples it replaces
 
-**The old plugins keep working and are not removed.** Disable **Feynman coach
-checkpoint** and **Course material** when you enable Study, or you get both: the
-offers and the costs are duplicated, and nothing is shared.
+Study supersedes `feynman-coach` and `course-material`, which this change
+deletes: remove those two folders from your plugins directory too, or they will
+keep offering the same things twice.
 
-Settings do **not** carry over — plugin data is per-plugin, and a plugin may not
-read another's. **Re-add each course once** (name, folder, Logseq name), and
-index it. That is the whole migration.
+Their settings do not carry over — plugin data is per-plugin, and a plugin may
+not read another's — so re-enter each course once (name, folder, Logseq name)
+and index it.
 
-The new plugin deliberately uses its own names (`course_library`,
-`study_explain`, question type `study-explain`). The host accumulates native tool
-names across *every* enabled plugin and refuses a collision by dropping the whole
-contribution of the plugin that loses — and packages are visited in sorted id
-order, so `study` would lose to `course-material` and `feynman-coach`. Reusing
-their names would have made this plugin silently contribute nothing whenever an
-old one was still enabled.
+The plugin uses its own tool names (`course_library`, `study_explain`, question
+type `study-explain`) rather than the superseded ones. The host accumulates
+native tool names across *every* enabled plugin and refuses a collision by
+dropping the whole contribution of the plugin that loses — and packages are
+visited in sorted id order — so reusing the old names would have made this
+plugin silently contribute nothing wherever an old copy was still installed.
 
 ## Once per course: the settings page
 
@@ -120,6 +119,15 @@ One tool, `course_library`, is the only way the slides enter a lesson.
 It cannot summarise. An excerpt is a substring of the page, which is a structural
 property rather than an instruction a model might drift from;
 `tests/plugin-study-librarian.test.ts` asserts exactly that containment.
+
+**The excerpts are the teacher's source, not its script.** Exactness is for
+grounding — so the teacher builds on what the slides actually say and cites the
+page it says it on — and it stops there. Every reply that carries excerpts also
+carries the rule for using them: explain it in your own teaching words at the
+learner's level, never paste or recite a slide, and quote a short phrase only
+where the exact wording carries the meaning, such as a definition. The same rule
+is in the tool's full description while probing and planning, and in its one-line
+pointer while teaching.
 
 **Recall.** Decks may be Italian or English. Terms are folded for accents and
 case (`perché` → `perche`) and put through deliberately crude suffix stripping,
@@ -207,17 +215,17 @@ rather than trusting it to stay retyped correctly:
 | nothing configured — prober, practice | **0** |
 | nothing configured — teacher | **483** (the explain-back box) |
 | a course exists, this session picked none | **483** — the course adds nothing |
-| course active, probing/planning — teacher | **745** |
-| course active, teaching — teacher | **580** |
-| course active — practice | **98** |
-| course + notes active, probing/planning — teacher | **1,087** |
-| course + notes active, teaching — teacher | **758** |
-| course + notes, planning, explain-back off | **605** |
+| course active, probing/planning — teacher | **797** |
+| course active, teaching — teacher | **587** |
+| course active — practice | **105** |
+| course + notes active, probing/planning — teacher | **1,146** |
+| course + notes active, teaching — teacher | **765** |
+| course + notes, planning, explain-back off | **664** |
 | everything off | **0** |
 
-So the librarian's rules cost 262 tokens where they matter (probing and planning,
-when the teacher is deciding what to teach) and 97 once teaching has started,
-where a pointer is enough. The notes add 342 and 178 the same way.
+So the librarian's rules cost 314 tokens where they matter (probing and planning,
+when the teacher is deciding what to teach) and 104 once teaching has started,
+where a pointer is enough. The notes add 349 and 178 the same way.
 
 Per call, not per turn:
 
@@ -225,9 +233,9 @@ Per call, not per turn:
 | --- | --- |
 | `course_library` inventory, 2 decks, neither indexed | ≈165 |
 | `course_library` inventory, 2 decks, both indexed | ≈131 |
-| `course_library` search, one term | ≈167 |
-| `course_library` search, three terms | ≈324 |
-| `course_library` search, 80 long pages that all match | ≈663, hard-capped |
+| `course_library` search, one term | ≈218 |
+| `course_library` search, three terms | ≈375 |
+| `course_library` search, 80 long pages that all match | ≈713, hard-capped |
 | `logseq_read_course_notes`, a three-day course | ≈425 |
 | `logseq_read_course_notes`, hard cap | ≈1,000 |
 | `logseq_search_notes`, hard cap | ≈700 |
@@ -248,7 +256,7 @@ The three separate pieces, on one teacher turn with a course picked and notes on
 With nothing picked it was still 1,254, because two of the three put text in the
 system prompt whether or not the session used them.
 
-The consolidated plugin pays 1,087 at its most expensive (planning), 758 while
+The consolidated plugin pays 1,146 at its most expensive (planning), 765 while
 teaching, 483 when nothing is picked, and **0** when nothing is configured —
 which the old set could not reach at all.
 

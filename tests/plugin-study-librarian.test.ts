@@ -124,5 +124,7 @@ test("nothing to search, nothing matched, and nothing asked are three different 
 	// A term that matched is never reported as a miss, and the reply says where it came from.
 	const found = librarian.renderSearch({ course: "DISTSYS", decks, terms: ["elezioni"] });
 	assert.match(found, /lecture-03\.pdf, p\. 2:/);
-	assert.match(found, /Verbatim slide text, not a summary/);
+	// The excerpts are the teacher's source, not a script to read out.
+	assert.match(found, /your SOURCE, not your script/);
+	assert.match(found, /quote a short phrase only where the exact wording carries the meaning/);
 });

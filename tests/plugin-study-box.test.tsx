@@ -21,8 +21,8 @@ import { buildAnswer, normalizeOptions, resolveCorrect, type QuestionData } from
 // on screen (class sets, inline rail paint), so a core restyle fails here instead of
 // silently drifting. It never reads source text.
 //
-// It is the same guard tests/plugin-feynman-coach-frontend.test.tsx keeps over the
-// example this plugin merged; both boxes have to stay native, so both are pinned.
+// It carries forward the guard the superseded feynman-coach example's own frontend
+// test used to keep over this same box.
 
 const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, {

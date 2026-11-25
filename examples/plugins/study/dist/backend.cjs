@@ -53,6 +53,10 @@ const isFolderEntry = value => typeof value === "string" && (value.startsWith("/
 const expandHome = folder => (folder.startsWith("~/") || folder.startsWith("~\\") ? path.join(os.homedir(), folder.slice(2)) : folder);
 const quoted = list => (list.length ? list.map(course => `"${course.name}"`).join(", ") : "none");
 const printable = value => ![...value].some(character => { const code = character.codePointAt(0); return code < 0x20 || code === 0x7f; });
+/** The learner may type the course either way; `[[FOR]]` and `FOR` are the same
+ *  page. Stored bare: that is what Logseq's search wants, and the UI adds the
+ *  brackets back when it shows the name. */
+const bareLogseqName = value => String(value ?? "").trim().replace(/^\[\[/, "").replace(/\]\]$/, "").trim();
 const object = value => {
 	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected an operation input object");
 	return value;
@@ -274,15 +278,16 @@ exports.activate = ctx => {
 	const LIBRARY_RULES = "Teach from these slides first, and reach them ONLY through this tool.\n"
 		+ "- Call it once with no `terms` to see what is in scope, then with the words you need. Several terms in one call; "
 		+ "Italian and English both match, accents and endings included.\n"
-		+ "- What comes back is the slides' own text with a deck and a page. Cite them exactly as printed, and never a page "
-		+ "you were not given.\n"
+		+ "- What comes back is the slides' own text with a deck and a page: your source, not your script. Explain it in your own "
+		+ "teaching words at the learner's level — never paste or recite a slide, quote a short phrase only where the exact wording "
+		+ "carries the meaning — and cite the deck and page exactly as printed, never a page you were not given.\n"
 		+ "- Nothing matched? Say the slides do not cover it. Then teach it yourself and say in the same breath that you are "
 		+ "going past them — background they assume, a step they skip, your own example, a correction. Going beyond them is "
 		+ "fine; leaving it unmarked is not.\n"
 		+ "- Image-only slides carry no text. For those, and only those, send ONE native `pdf` job for that deck.";
 
-	const LIBRARY_POINTER = "The slides for this session's course, as their own text with deck and page. "
-		+ "Call it with the words you need; cite only the pages it gives you.";
+	const LIBRARY_POINTER = "The slides for this session's course, as their own text with deck and page — source to explain from "
+		+ "in your own words, never to recite. Cite only the pages it gives you.";
 
 	const NOTES_POINTER = "The learner's own Logseq notes for this course. Read them once, lead with a doubt they wrote.";
 
@@ -336,7 +341,7 @@ exports.activate = ctx => {
 					// in settings next to the slides folder. So the name is defaulted here
 					// and the model is told it may omit it, instead of being made to guess
 					// a `[[COURSE]]` block it has never seen.
-					const logseqName = findExact(selection.course)?.logseq || selection.course;
+					const logseqName = bareLogseqName(findExact(selection.course)?.logseq) || selection.course;
 					tools.push({
 						...tool,
 						description: full
@@ -388,7 +393,7 @@ exports.activate = ctx => {
 		try { stat = fs.statSync(expandHome(folder)); }
 		catch { throw new Error(`No such folder: ${expandHome(folder)}`); }
 		if (!stat.isDirectory()) throw new Error(`Not a folder: ${expandHome(folder)}`);
-		const logseq = typeof value.logseq === "string" ? value.logseq.trim() : "";
+		const logseq = bareLogseqName(value.logseq);
 		if (logseq.length > MAX_NAME) throw new Error(`Keep the Logseq name under ${MAX_NAME} characters`);
 		if (logseq && !printable(logseq)) throw new Error("The Logseq name cannot contain control characters");
 		persistCourses([...courses, { name, folder, logseq }]);
@@ -400,7 +405,7 @@ exports.activate = ctx => {
 		const value = object(input);
 		const course = findExact(value.name);
 		if (!course) throw new Error("That course is not configured");
-		const logseq = typeof value.logseq === "string" ? value.logseq.trim() : "";
+		const logseq = bareLogseqName(value.logseq);
 		if (logseq.length > MAX_NAME) throw new Error(`Keep the Logseq name under ${MAX_NAME} characters`);
 		if (logseq && !printable(logseq)) throw new Error("The Logseq name cannot contain control characters");
 		persistCourses(courses.map(entry => (entry === course ? { ...entry, logseq } : entry)));

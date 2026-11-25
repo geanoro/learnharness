@@ -315,7 +315,9 @@ function renderSearch({ course, decks, terms, limits, unindexed }) {
 		"",
 	];
 	for (const hit of result.hits) lines.push(`${hit.deck}, p. ${hit.page}:`, hit.text, "");
-	lines.push("Verbatim slide text, not a summary. Cite the deck and page exactly as printed above, and never a page that is not.");
+	lines.push("Verbatim slide text: your SOURCE, not your script. Explain it in your own teaching words at the learner's level — "
+		+ "never paste or recite a slide, quote a short phrase only where the exact wording carries the meaning, such as a "
+		+ "definition — and cite the deck and page exactly as printed above, never a page that is not.");
 	const note = imageOnlyNote(decks);
 	if (note) lines.push(note);
 	if (result.truncated) lines.push("More pages matched than fit; narrow the terms if this was not enough.");

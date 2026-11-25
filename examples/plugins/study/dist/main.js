@@ -27,6 +27,8 @@ const HEADING = "text-sm uppercase tracking-widest text-foreground";
 const CHECK = "flex items-center gap-2 text-xs";
 const MUTED = "text-xs text-muted-foreground";
 const NOTE = "pl-3 text-xs text-muted-foreground";
+const IN_USE = "shrink-0 rounded-full border border-primary px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-primary";
+const IN_USE_LINE = "pl-3 text-xs text-foreground";
 
 // ── the explain-back box ────────────────────────────────────────────────────
 // The look below is reimplemented, not imported: components/confidence-rail.tsx
@@ -487,6 +489,8 @@ export function activate(ctx) {
 		const notesRow = element("div", "flex flex-col gap-2", root);
 		const progress = element("p", NOTE, root, "");
 		progress.setAttribute("data-testid", "study-picker-progress");
+		const status = element("p", NOTE, root, "");
+		status.setAttribute("data-testid", "study-picker-status");
 		const actions = element("div", "flex gap-2", root);
 		const save = element("button", BUTTON, actions, "Use these decks");
 		save.type = "button";
@@ -499,8 +503,35 @@ export function activate(ctx) {
 		let decks = [];
 		let ticked = new Set();
 		let notes = false;
+		/** What the backend has stored for THIS session: what the teacher actually
+		 *  uses. Kept apart from the ticked boxes, which are only a draft until
+		 *  "Use these decks" commits them. */
+		let saved = null;
+
+		const sameAsSaved = () => Boolean(saved) && saved.course === chosen && saved.notes === notes
+			&& saved.decks.length === ticked.size && saved.decks.every(deck => ticked.has(deck));
 
 		const fail = error => { if (alive) message.textContent = error instanceof Error ? error.message : String(error); };
+
+		/** The committed state, in words, right under the decks it describes. */
+		const renderStatus = () => {
+			if (!alive) return;
+			status.replaceChildren();
+			if (!saved) {
+				status.className = NOTE;
+				status.textContent = chosen
+					? "Nothing is in use yet — press Use these decks to send this course to the teacher."
+					: "Nothing is in use for this session: the teacher is told nothing about a course.";
+				return;
+			}
+			status.className = IN_USE_LINE;
+			const badge = element("span", IN_USE, status, "In use");
+			badge.setAttribute("data-testid", "study-in-use");
+			element("span", "", status,
+				` ${saved.course} — ${saved.decks.length ? `${saved.decks.length} deck${saved.decks.length === 1 ? "" : "s"}: ${saved.decks.join(", ")}` : "the whole course"}`
+				+ `${saved.notes ? ", with your Logseq notes" : ""}.`
+				+ `${sameAsSaved() ? "" : " Your changes above are not in use yet."}`);
+		};
 
 		const renderNotes = () => {
 			if (!alive) return;
@@ -515,20 +546,25 @@ export function activate(ctx) {
 			box.type = "checkbox";
 			box.checked = notes;
 			box.setAttribute("data-testid", "study-notes-toggle");
-			box.onchange = () => { notes = box.checked; };
+			box.onchange = () => { notes = box.checked; renderDecks(); };
 			const course = state.courses.find(entry => entry.name === chosen);
+			// The stored name is bare; the brackets are how Logseq writes a page,
+			// so they are added here and never stored twice.
+			const bare = (course?.logseq ?? "").replace(/^\[\[/, "").replace(/\]\]$/, "");
 			element("span", "min-w-0 truncate font-ui", label,
-				`Use my Logseq notes${course?.logseq ? ` for [[${course.logseq}]]` : ""}`);
+				`Use my Logseq notes${bare ? ` for [[${bare}]]` : ""}`);
 		};
 
 		const renderDecks = () => {
 			if (!alive) return;
 			deckList.replaceChildren();
-			save.disabled = !chosen;
-			if (!chosen) return;
+			save.disabled = !chosen || sameAsSaved();
+			save.textContent = saved && !sameAsSaved() ? "Update these decks" : "Use these decks";
+			if (!chosen) { renderStatus(); return; }
 			if (!decks.length) {
 				element("p", NOTE, deckList, "That folder holds no PDF files. PowerPoint is not supported — export .pptx to PDF first.");
 				save.disabled = true;
+				renderStatus();
 				return;
 			}
 			const unindexed = decks.filter(deck => !deck.indexed);
@@ -546,6 +582,10 @@ export function activate(ctx) {
 				element("span", "min-w-0 truncate font-ui", label, deck.label);
 				element("span", "tabular-nums text-muted-foreground", label,
 					deck.indexed ? `${deck.pages} page${deck.pages === 1 ? "" : "s"}` : "not indexed");
+				// Marks what the teacher is using NOW, which is not always what is ticked.
+				if (saved && (saved.decks.includes(deck.label) || (!saved.decks.length && saved.course === chosen))) {
+					element("span", IN_USE, label, "In use").setAttribute("data-testid", "study-in-use");
+				}
 			}
 			if (unindexed.length) {
 				const row = element("div", "flex items-center gap-2 pl-3", deckList);
@@ -576,6 +616,7 @@ export function activate(ctx) {
 					})();
 				};
 			}
+			renderStatus();
 		};
 
 		const loadDecks = async (course) => {
@@ -619,9 +660,18 @@ export function activate(ctx) {
 			message.textContent = "";
 			save.disabled = true;
 			void (async () => {
-				try { await ctx.call("select", { chatId, course: chosen, decks: [...ticked], notes }); }
+				try {
+					// The backend answers with what it actually stored - a deck it does not
+					// recognise is dropped - so the confirmation shows the real selection,
+					// never the hopeful one.
+					const stored = await ctx.call("select", { chatId, course: chosen, decks: [...ticked], notes });
+					if (!alive) return;
+					saved = stored;
+					ticked = new Set(stored.decks);
+					notes = stored.notes === true;
+				}
 				catch (error) { fail(error); }
-				finally { if (alive) renderDecks(); }
+				finally { if (alive) { renderDecks(); renderNotes(); } }
 			})();
 		};
 		clear.onclick = () => {
@@ -634,6 +684,7 @@ export function activate(ctx) {
 					ticked = new Set();
 					decks = [];
 					notes = false;
+					saved = null;
 					renderCourses();
 					renderDecks();
 					renderNotes();
@@ -647,6 +698,7 @@ export function activate(ctx) {
 				if (!alive) return;
 				state = loaded;
 				if (selection) {
+					saved = selection;
 					chosen = selection.course;
 					ticked = new Set(selection.decks);
 					notes = selection.notes === true;

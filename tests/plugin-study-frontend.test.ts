@@ -93,7 +93,12 @@ async function mountFrontend(t: import("node:test").TestContext, options: { desk
 			}
 			if (operation === "putIndex") return { label: (input as { label: string }).label, pages: 1, imageOnly: 0 };
 			if (operation === "selection") return null;
-			if (operation === "select") return input;
+			if (operation === "clear") return null;
+			if (operation === "select") {
+				// The real backend answers with what it STORED, not with the request.
+				const value = input as { course: string; decks: string[]; notes: boolean };
+				return { course: value.course, decks: value.decks, notes: value.notes };
+			}
 			if (operation === "setLogseq") { state = { ...state, logseq: { ...(state.logseq as object), hasToken: true } }; return state; }
 			throw new Error(`Unexpected operation: ${operation}`);
 		},
@@ -252,6 +257,33 @@ test("the session picker is placed in the top bar and binds the choice to that o
 	await flush();
 	assert.deepEqual(harness.calls.find(call => call.operation === "select")?.input,
 		{ chatId: "chat_abc", course: "DISTSYS", decks: ["lecture-03.pdf"], notes: true });
+
+	// Pressing the button has to SHOW that it did something: what the teacher now
+	// uses is named, the deck it uses carries a badge, and there is nothing left
+	// to save until the learner changes something.
+	const status = () => byTestId(panel, "study-picker-status")!.textContent!;
+	assert.match(status(), /In use/);
+	assert.match(status(), /DISTSYS — 1 deck: lecture-03\.pdf/);
+	assert.match(status(), /with your Logseq notes/);
+	assert.equal(panel.querySelectorAll('[data-testid="study-in-use"]').length, 2, "the status line and the deck row both say so");
+	assert.equal((buttonNamed(panel, "Use these decks") as HTMLButtonElement).disabled, true, "nothing left to save");
+
+	// Changing the draft re-opens the action and says the change is not live yet.
+	const second = [...panel.querySelectorAll('input[type="checkbox"]:not([data-testid])')][1] as HTMLInputElement;
+	second.checked = true;
+	fire(second, "onchange");
+	await flush();
+	const update = buttonNamed(panel, "Update these decks") as HTMLButtonElement;
+	assert.ok(update, "the button says it would update an existing selection");
+	assert.equal(update.disabled, false);
+	assert.match(status(), /not in use yet/);
+
+	// Clearing takes the session back to contributing nothing.
+	fire(buttonNamed(panel, "Clear selection"), "onclick");
+	await flush();
+	assert.equal(panel.querySelector('[role="alert"]')!.textContent, "", "clearing reported no error");
+	assert.equal(panel.querySelectorAll('[data-testid="study-in-use"]').length, 0);
+	assert.match(status(), /the teacher is told nothing about a course/);
 });
 
 test("the picker tells the learner when the chosen folder is not the course's", async t => {
