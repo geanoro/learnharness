@@ -272,21 +272,21 @@ as directly by the primary sources:
   [`dist/main.js`](../examples/plugins/teaching-extension/dist/main.js). It is a focused
   existing-agent recipe, not a replacement for Flashcards, coding practice or custom
   learner-input contracts.
-- Feynman coach checkpoint (`examples/plugins/feynman-coach/`): dedicated
-  explain-back question box with its own confidence bar, built on `registerQuestionType`
-  and `registerQuestionRenderer`. Read its `dist/backend.cjs`. It lives in the repository
-  checkout and is not part of the downloaded authoring kit.
-- Course material (`examples/plugins/course-material/`): a persistent
-  course-to-slide-folder map through `registerSettings`, a per-session deck picker placed
-  in the session top bar with `registerAction`/`placeAction`, and one listing tool added
-  to the prober, teacher and practice turns; the native `pdf` job still does the reading
-  and citing. Read its `dist/backend.cjs` with `dist/main.js` for a worked example of
-  keeping a per-turn contribution conditional: it registers no instructions at all,
-  because `registerInstructions` takes one static text charged to every matching turn,
-  and instead sizes the tool's own description from the frozen `{chatId, agent}` its
-  factory receives — nothing without a configured course, one line without a selected
-  one, the rules only where they apply — with a hard cap on one reply's size. It lives
-  in the repository checkout and is not part of the downloaded authoring kit.
+- Study (`examples/plugins/study/`): the consolidated study plugin. It supersedes the
+  earlier `feynman-coach` and `course-material` examples, which it replaced, and adds a
+  librarian over an on-disk index of the slides' own text.
+  Read its `dist/backend.cjs` with `dist/librarian.cjs`, `dist/phase.cjs` and
+  `dist/main.js`. Three things it demonstrates that nothing else here does: building an
+  index from the host's own PDF conversion, which is frontend-only and takes a browser
+  `File`, so a native `<input type="file" webkitdirectory>` plus
+  `window.lh.getPathForFile` supplies both the files and the folder's path in one
+  gesture; sizing a per-turn contribution by the session's PHASE, folded from one record
+  through `ctx.learning.getSession` rather than from `listSessions()`, which reads every
+  chat file; and a deterministic ranked search that answers with verbatim page excerpts,
+  so the reply cannot be a summary by construction rather than by instruction. It
+  registers no instructions at all and reaches a true zero per turn when nothing is
+  configured. It lives in the repository checkout and is not part of the downloaded
+  authoring kit.
 
 Explicitly running their agents/workers may incur configured-provider costs. Reading,
 copying or enabling examples is not permission to make model requests. For APIs not

@@ -14,12 +14,15 @@ import { CONFIDENCE_ROW_PAD } from "../components/question-layout.ts";
 import { DEFAULT_THEME } from "../src/core/themes.ts";
 import { buildAnswer, normalizeOptions, resolveCorrect, type QuestionData } from "../src/core/question-core.ts";
 
-// Finding 4/5 from the independent critique (data/lh-feynman-critica/report.md): the
-// plugin re-creates the quiz dock's look with hand-copied Tailwind class strings and
-// the confidence color ramp. This test RENDERS the real native components and the
+// The study plugin re-creates the quiz dock's look with hand-copied Tailwind class
+// strings and the confidence color ramp, because those components are core-internal and
+// not part of the study plugin SDK. This test RENDERS the real native components and the
 // plugin's own editor/answered views side by side and compares what each actually put
 // on screen (class sets, inline rail paint), so a core restyle fails here instead of
 // silently drifting. It never reads source text.
+//
+// It carries forward the guard the superseded feynman-coach example's own frontend
+// test used to keep over this same box.
 
 const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, {
@@ -27,12 +30,21 @@ Object.assign(globalThis, {
 	IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const pluginDir = path.resolve("examples/plugins/feynman-coach");
+const pluginDir = path.resolve("examples/plugins/study");
 const { activate } = await import(path.join(pluginDir, "dist/main.js"));
 
 function mountRenderer() {
 	let renderer: { mountAnswerEditor: Function; mountAnswered: Function } | undefined;
-	activate({ registerQuestionRenderer: (definition: typeof renderer) => { renderer = definition; } });
+	activate({
+		registerQuestionRenderer: (definition: typeof renderer) => { renderer = definition; },
+		registerSettings: () => () => {},
+		registerAction: () => () => {},
+		placeAction: () => () => {},
+		ui: { openDialog: () => ({ update() {}, dispose() {} }) },
+		signal: new AbortController().signal,
+		call: async () => ({}),
+		documents: { toMarkdown: async () => ({ name: "", markdown: "", notices: [] }) },
+	});
 	assert.ok(renderer, "registerQuestionRenderer was not called");
 	return renderer!;
 }
@@ -103,9 +115,9 @@ const confidenceParts = (root: El) => ({
 	value: root.querySelector('[data-testid="confidence-value"]'),
 });
 
-test("the plugin's \"I don't know\" row and confidence row render with the real quiz dock's classes, idle and pressed", async () => {
+test("the study plugin's \"I don't know\" row and confidence row render with the real quiz dock's classes, idle and pressed", async () => {
 	const plugin = mountPluginEditor();
-	const pluginButton = plugin.querySelector('[data-testid="feynman-dont-know"]')!;
+	const pluginButton = plugin.querySelector('[data-testid="study-dont-know"]')!;
 	await withNativeQuizDock(async (native, click) => {
 		for (const pressed of [false, true]) {
 			if (pressed) {
@@ -131,7 +143,7 @@ test("the plugin's \"I don't know\" row and confidence row render with the real 
 	});
 });
 
-test("the rail paint and the color ramp match the real confidence-rail exports, in the native dock and the plugin", async () => {
+test("the rail paint and the color ramp match the real confidence-rail exports, in the native dock and the study plugin", async () => {
 	assert.equal(CONFIDENCE_ROW_PAD.split(" ").sort().join(" "), classSet(mountPluginEditor().querySelector("[data-question-confidence]")).join(" "));
 	const expected = confidenceRailStyle(50);
 	const plugin = mountPluginEditor().querySelector('[data-testid="confidence-rail"]') as unknown as HTMLElement;
@@ -159,7 +171,7 @@ test("the rail paint and the color ramp match the real confidence-rail exports, 
 	});
 });
 
-test("the plugin's answer field matches the real free-text \"Your answer\" field", () => {
+test("the study plugin's answer field matches the real free-text \"Your answer\" field", () => {
 	const nativeRoot = htmlOf(renderToStaticMarkup(<QuestionDock toolName="ask_user_question" toolCallId="a1" input={{ question: "Q?" } as never}
 		expanded onExpand={() => {}} onSubmit={() => {}} />));
 	const nativeWrap = nativeRoot.querySelector('[data-testid="answer-field"]')!;
@@ -169,10 +181,10 @@ test("the plugin's answer field matches the real free-text \"Your answer\" field
 	assert.deepEqual(classSet(pluginWrap.firstElementChild), classSet(nativeWrap.firstElementChild), "label");
 	const nativeInput = classSet(nativeWrap.querySelector('[role="textbox"]'));
 	const missing = classSet(plugin.querySelector("textarea")).filter(c => !nativeInput.includes(c));
-	assert.deepEqual(missing, [], "every class the plugin reuses on its input exists on the native field");
+	assert.deepEqual(missing, [], "every class the study plugin reuses on its input exists on the native field");
 });
 
-test("the plugin's answered view matches the real AnsweredCard for a confident answer and for a decline", () => {
+test("the study plugin's answered view matches the real AnsweredCard for a confident answer and for a decline", () => {
 	const renderCard = (req: Parameters<typeof buildAnswer>[1]) => htmlOf(renderToStaticMarkup(
 		<AppearanceProvider initialAppearance={{ adaptiveQuestions: false }} initialTheme={DEFAULT_THEME}>
 			<AnsweredCard answer={buildAnswer(quizQD(), req)} input={quizInput} />
@@ -182,7 +194,7 @@ test("the plugin's answered view matches the real AnsweredCard for a confident a
 	const nativeConfident = renderCard({ text: "A causes B.", confidence: 70 });
 	const confident = dom.document.createElement("div") as unknown as El;
 	renderer.mountAnswered(confident, { answer: { explanation: "A causes B.", confidence: 70 } });
-	assert.deepEqual(classSet(confident.querySelector('[data-testid="feynman-explanation-answered"]')), classSet(byText(nativeConfident, "A causes B.")), "quoted text");
+	assert.deepEqual(classSet(confident.querySelector('[data-testid="study-explanation-answered"]')), classSet(byText(nativeConfident, "A causes B.")), "quoted text");
 	const nativeRow = nativeConfident.querySelector('[data-testid="answered-confidence"]')!;
 	const pluginRow = confident.querySelector('[data-testid="answered-confidence"]')!;
 	assert.deepEqual(classSet(pluginRow), classSet(nativeRow), "confidence row");
@@ -200,7 +212,7 @@ test("the plugin's answered view matches the real AnsweredCard for a confident a
 	const nativeDecline = renderCard({ dontKnow: true });
 	const declined = dom.document.createElement("div") as unknown as El;
 	renderer.mountAnswered(declined, { answer: { dontKnow: true } });
-	assert.deepEqual(classSet(declined.querySelector('[data-testid="feynman-dont-know-answered"]')), classSet(byText(nativeDecline, "Answered")), "dontKnow note");
+	assert.deepEqual(classSet(declined.querySelector('[data-testid="study-dont-know-answered"]')), classSet(byText(nativeDecline, "Answered")), "dontKnow note");
 });
 
 test("mounts the answer editor, publishes explanation+confidence on input/slide, and disposes cleanly", () => {
@@ -211,7 +223,7 @@ test("mounts the answer editor, publishes explanation+confidence on input/slide,
 	const handle = renderer.mountAnswerEditor(container, props);
 	assert.deepEqual(last(), { status: "empty" }, "no text yet");
 
-	const textarea = container.querySelector('[data-testid="feynman-explanation-input"]') as unknown as HTMLTextAreaElement;
+	const textarea = container.querySelector('[data-testid="study-explanation-input"]') as unknown as HTMLTextAreaElement;
 	textarea.value = "A causes B because of the mechanism.";
 	textarea.dispatchEvent(new (window as unknown as { Event: typeof Event }).Event("input", { bubbles: true }));
 	assert.deepEqual(last(), { status: "ready", value: { explanation: "A causes B because of the mechanism.", confidence: 50 } });
@@ -235,11 +247,11 @@ test("the \"I don't know\" toggle mirrors the native control: disables the field
 	const { props, last } = editorProps();
 	renderer.mountAnswerEditor(container, props);
 
-	const textarea = container.querySelector('[data-testid="feynman-explanation-input"]') as unknown as HTMLTextAreaElement;
+	const textarea = container.querySelector('[data-testid="study-explanation-input"]') as unknown as HTMLTextAreaElement;
 	textarea.value = "Some explanation typed before deciding.";
 	textarea.dispatchEvent(new (window as unknown as { Event: typeof Event }).Event("input", { bubbles: true }));
 
-	const dontKnow = container.querySelector('[data-testid="feynman-dont-know"]') as unknown as HTMLButtonElement;
+	const dontKnow = container.querySelector('[data-testid="study-dont-know"]') as unknown as HTMLButtonElement;
 	assert.equal(dontKnow.getAttribute("aria-pressed"), "false");
 	dontKnow.dispatchEvent(new (window as unknown as { Event: typeof Event }).Event("click", { bubbles: true }));
 
@@ -265,13 +277,13 @@ test("mountAnswered renders the quoted explanation+confidence, or the dontKnow n
 
 	const normal = document.createElement("div");
 	renderer.mountAnswered(normal, { answer: { explanation: "A causes B.", confidence: 70 } });
-	assert.equal(normal.querySelector('[data-testid="feynman-explanation-answered"]')!.textContent, "“A causes B.”");
+	assert.equal(normal.querySelector('[data-testid="study-explanation-answered"]')!.textContent, "“A causes B.”");
 	assert.equal((normal.querySelector('[data-testid="answered-confidence"] span') as unknown as HTMLElement).textContent, "70%");
-	assert.equal(normal.querySelector('[data-testid="feynman-dont-know-answered"]'), null);
+	assert.equal(normal.querySelector('[data-testid="study-dont-know-answered"]'), null);
 
 	const declined = document.createElement("div");
 	renderer.mountAnswered(declined, { answer: { dontKnow: true } });
-	assert.equal(declined.querySelector('[data-testid="feynman-explanation-answered"]'), null, "no quoted explanation for a decline");
+	assert.equal(declined.querySelector('[data-testid="study-explanation-answered"]'), null, "no quoted explanation for a decline");
 	assert.equal(declined.querySelector('[data-testid="answered-confidence"]'), null, "no confidence record for a decline, matching the native dontKnow convention");
-	assert.match(declined.querySelector('[data-testid="feynman-dont-know-answered"]')!.textContent!, /I don't know/);
+	assert.match(declined.querySelector('[data-testid="study-dont-know-answered"]')!.textContent!, /I don't know/);
 });
