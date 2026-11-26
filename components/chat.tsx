@@ -103,6 +103,8 @@ import { createPluginSessionActionContext, type PluginSessionViewInput } from "@
 import type { SessionInputViewReader, SessionViewTargets, NativeQuestionViewState, ViewReaderRef } from "./session-view-readers";
 import type { JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import { isSubagentSteer, newestLearnerTurnFrom, olderPartsFrom } from "./transcript-rows";
+import { useTranscriptWindow } from "./use-transcript-window";
+import { messageJumpTargets } from "./transcript-window";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
 import {
 	CompactionCutDivider,
@@ -979,6 +981,43 @@ export function Chat({
 	// composer, then its comment popover. The transcript's scroll element
 	// arrives late (StickToBottom attaches it), so it is reported up.
 	const [transcriptElement, setTranscriptElement] = useState<HTMLElement | null>(null);
+	// FIND SUSPENDS THE WINDOW. Find reads the live DOM (session-find-dom.ts:
+	// "hidden/unmounted sections do not" count), so a windowed transcript
+	// would search only what happens to be built. Opening the bar therefore
+	// builds the whole session once — the search is exactly the one it always
+	// was, at the switch cost the window otherwise removes — and closing it
+	// gives the window back. Owned here, not inside the bar, so the two land
+	// in one render.
+	const [findOpen, setFindOpen] = useState(false);
+	// The window's content resizes would otherwise swallow the learner's own
+	// scroll away from the bottom (see useTranscriptWindow's stopScroll).
+	const stopTranscriptScroll = useCallback(() => scrollContextRef.current?.stopScroll(), []);
+	const transcriptWindow = useTranscriptWindow({
+		messages, scroller: transcriptElement, suspended: findOpen, stopScroll: stopTranscriptScroll,
+	});
+	// Opening or closing Find replaces the whole transcript in one commit, so
+	// the reader's place has to be taken down before React does it.
+	const captureReadingPosition = transcriptWindow.captureReadingPosition;
+	const onFindOpenChange = useCallback((open: boolean) => {
+		captureReadingPosition();
+		setFindOpen(open);
+	}, [captureReadingPosition]);
+	// WHICH ROW A JUMP MEANS. A jump — a hash arrival, a graph link, a
+	// citation — names a NATIVE message id, and projectView merges
+	// consecutive native messages into one view row, so that id usually
+	// belongs to a text PART in the middle of a group rather than to the view
+	// message the group became.
+	const jumpTargets = useMemo(() => messageJumpTargets(messages, textPartMessageId), [messages]);
+	const jumpTargetsRef = useRef(jumpTargets);
+	jumpTargetsRef.current = jumpTargets;
+	const revealRowRef = useRef(transcriptWindow.revealRow);
+	revealRowRef.current = transcriptWindow.revealRow;
+	/** Build a row a jump is about to scroll to: the learner cannot see it
+	 *  yet, so the window has to be asked for it before the DOM is searched. */
+	const ensureMessageBuilt = useCallback(
+		(messageId: string) => revealRowRef.current(jumpTargetsRef.current.get(messageId)),
+		[],
+	);
 	const [citationEdit, setCitationEdit] = useState<CitationEditTarget | null>(null);
 	const lastCiteInputRef = useRef<HTMLElement | null>(null);
 	const citeInput = useCallback(() => {
@@ -1072,16 +1111,25 @@ export function Chat({
 	const citationActions = useMemo<CitationActions>(() => ({
 		editComment: (citation, source) => setCitationEdit({ citation, link: source.link, start: source.start, host: source.host, input: source.host.closest<HTMLElement>("[data-file-path-input]") ?? undefined }),
 		openSource: (citation) => {
-			const context = scrollContextRef.current;
-			revealCitationSource({
-				transcript: transcriptElementRef.current,
-				scroll: context ? { scrollRef: context.scrollRef, stopScroll: context.stopScroll } : null,
-				citation,
-				currentChatId: chatId,
-				navigate: (href) => router.push(href),
-			});
+			const reveal = () => {
+				const context = scrollContextRef.current;
+				revealCitationSource({
+					transcript: transcriptElementRef.current,
+					scroll: context ? { scrollRef: context.scrollRef, stopScroll: context.stopScroll } : null,
+					citation,
+					currentChatId: chatId,
+					navigate: (href) => router.push(href),
+				});
+			};
+			// The cited passage may not be built. Ask the window for it and let
+			// React commit before the DOM is searched for the quote.
+			if (ensureMessageBuilt(citation.messageId) === "building") {
+				window.requestAnimationFrame(() => window.requestAnimationFrame(reveal));
+				return;
+			}
+			reveal();
 		},
-	}), [chatId, router]);
+	}), [chatId, router, ensureMessageBuilt]);
 	useEffect(() => {
 		if (dictation.active) {
 			dictationWasActiveRef.current = true;
@@ -1761,10 +1809,10 @@ export function Chat({
 					<PluginSessionTopBarActions readContext={actionContext} captureContext={captureActionContext} refreshRef={refreshPluginActions} />
 				</TopBar>
 
-				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
+				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} onOpenChange={onFindOpenChange} />
 				<div ref={sessionFindScopeRef} className="relative flex min-h-0 flex-1">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
-					<SessionMessageNavigation />
+					<SessionMessageNavigation ensureBuilt={ensureMessageBuilt} />
 					<TranscriptElementReporter onElement={setTranscriptElement} />
 					<ConversationContent className="min-h-full gap-0 p-0">
 						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
@@ -1775,8 +1823,29 @@ export function Chat({
 								/>
 							)}
 
-							{messages.map((m, mi) =>
-								m.role === "user" && isSubagentSteer(m) ? (
+							{/* THE WINDOW'S STAND-IN: the height of every row above the
+							    window, so the scroller keeps the geometry the whole
+							    transcript had. Rendered only when there IS something
+							    above — an empty flex child would still take a gap. */}
+							{transcriptWindow.before > 0 && (
+								<div aria-hidden data-testid="transcript-window-spacer" data-edge="before"
+									style={{ height: transcriptWindow.before, flexShrink: 0 }} />
+							)}
+
+							{transcriptWindow.groups.map((group) => {
+								const mi = group.mi;
+								const m = messages[mi]!;
+								// Legacy transcripts (pre id-hygiene) can hold empty ids;
+								// the index keeps keys and row identities unique for them.
+								const rowKey = m.id || `m-${mi}`;
+								return (
+								// display: contents — the wrapper carries the row's
+								// identity for measurement and generates no box, so the
+								// column's gaps and widths are the ones it always had.
+								// An assistant group's rows are its PARTS, so the group
+								// wrapper claims no identity of its own.
+								<div key={rowKey} data-lh-row={group.parts ? undefined : rowKey} className="contents">
+								{m.role === "user" && isSubagentSteer(m) ? (
 									// Sub-agent delivery (wake-pipeline steer): NO message bubble — the
 									// artifact card sits in the transcript column directly, full width
 									// and centered like the teacher's artifacts (contracts.ts "THE ASYNC
@@ -1873,7 +1942,7 @@ export function Chat({
 										    Rendered WITHOUT the Message wrapper — that is the bubble. */
 											<div
 										data-testid="user-message"
-										data-older-transcript-row={mi < newestTurnFrom ? "" : undefined}
+										data-older-transcript-row={mi < newestTurnFrom ? "turn" : undefined}
 										/* THE DOCUMENT, ALL-IN (owner rounds two+three, 2026-10-07):
 										    no chat side — the user message is a full-width card-color
 										    BAND, the IDENTICAL geometry as the thinking rows: 5px band
@@ -1893,9 +1962,23 @@ export function Chat({
 												<SubmittedImages images={m.parts.filter((part) => part.type === "image").map(part => ({ type: "image" as const, data: part.data as string, mimeType: part.mimeType as string }))} />
 											</div>
 									) : (
-									<Message from="assistant" className="max-w-full" data-older-transcript-row={mi < newestTurnFrom ? "" : undefined}>
+									/* NOT contained (window round): the group's unbuilt parts
+									   are reserved INSIDE this wrapper, so its height is mostly
+									   stand-in and no single estimate can stand for it — a group
+									   skipped while off screen would have reported the 800px
+									   default instead of its tens of thousands of pixels. The
+									   parts inside carry their own containment, and the window
+									   already excludes everything far from the viewport, so the
+									   group-level marker buys nothing. */
+									<Message from="assistant" className="max-w-full">
 									<MessageContent className="w-full">
-											{m.parts.map((part, pi) => {
+											{group.before > 0 && (
+												<div aria-hidden data-testid="transcript-window-spacer" data-edge="parts-before"
+													style={{ height: group.before, flexShrink: 0 }} />
+											)}
+											{(group.parts ?? []).map((pi) => {
+												const part = m.parts[pi]!;
+												return <div key={pi} data-lh-row={`${rowKey}:${pi}`} className="contents">{(() => {
 												if (part.pluginProblem) return <ProblemCard key={pi} part={{ ...part, state: part.state ?? "input-available", toolCallId: part.toolCallId ?? "" }} />;
 												if (part.pluginQuestion) return <PluginQuestionPart key={pi} part={part} chatId={chatId} />;
 												const isLastPart = mi === messages.length - 1 && pi === m.parts.length - 1;
@@ -1998,13 +2081,26 @@ export function Chat({
 														return null;
 													}
 												}
+												})()}</div>;
 											})}
+											{group.after > 0 && (
+												<div aria-hidden data-testid="transcript-window-spacer" data-edge="parts-after"
+													style={{ height: group.after, flexShrink: 0 }} />
+											)}
 										</MessageContent>
 										{m.role === "assistant" && renderSideEntry(sideEntries.get(m.id)?.get(m.parts.length))}
 									</Message>
 									)}
 								</Fragment>
-							))}
+								)}
+								</div>
+								);
+							})}
+
+							{transcriptWindow.after > 0 && (
+								<div aria-hidden data-testid="transcript-window-spacer" data-edge="after"
+									style={{ height: transcriptWindow.after, flexShrink: 0 }} />
+							)}
 
 							{/* THE placeholder, ACTION-gated (owner, optimistic round
 							    3, 2026-10-02): spinner + shimmered Thinking… from the

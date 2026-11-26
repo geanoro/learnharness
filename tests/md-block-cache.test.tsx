@@ -263,7 +263,7 @@ describe("markdown block wrappers", () => {
 		const { document: doc } = parseHTML(`<div id="host">${html}</div>`);
 		const wrappers = [...doc.querySelectorAll("[data-md-block]")];
 		assert.equal(wrappers.length, 3);
-		const rootEl = wrappers[0].parentElement;
+		const rootEl = wrappers[0]!.parentElement;
 		assert.ok(wrappers.every((w) => w.parentElement === rootEl), "wrappers are siblings");
 		assert.equal(rootEl?.children.length, 3, "the root's direct children are exactly the wrappers");
 		for (const w of wrappers) assert.equal(w.children.length, 1, "one markdown element per wrapper");
